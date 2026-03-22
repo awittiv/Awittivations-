@@ -24,7 +24,6 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import anthropic
-import httpx
 import telegram_bot as tg
 
 load_dotenv()
@@ -37,14 +36,18 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten to your frontend domain in production
+    allow_origins=_allowed_origins,  # set ALLOWED_ORIGINS=https://yourapp.com in production
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+_api_key = os.getenv("ANTHROPIC_API_KEY")
+if not _api_key:
+    raise RuntimeError("ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key.")
+client = anthropic.AsyncAnthropic(api_key=_api_key)
 
 # ─── Enums & Models ──────────────────────────────────────────────────────────
 
@@ -226,8 +229,8 @@ async def orchestrate(req: TaskRequest):
     ]
 
     try:
-        api_response = client.messages.create(
-            model="claude-opus-4-6",
+        api_response = await client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
             max_tokens=1024,
             system=ORCHESTRATOR_SYSTEM,
             messages=messages,
@@ -237,9 +240,12 @@ async def orchestrate(req: TaskRequest):
         raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}")
 
     try:
-        llm_result = json.loads(raw.replace("```json", "").replace("```", "").strip())
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=502, detail="Blueprint parse failed — LLM returned non-JSON.")
+        _match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not _match:
+            raise ValueError("No JSON object found in LLM response.")
+        llm_result = json.loads(_match.group())
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=502, detail=f"Blueprint parse failed — {e}")
 
     try:
         agent = AgentType(llm_result["agent"])
@@ -302,7 +308,7 @@ async def telegram_webhook(request: Request):
     """
     try:
         update = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid JSON from Telegram.")
 
     message = update.get("message") or update.get("edited_message")
@@ -372,7 +378,9 @@ async def telegram_webhook_info():
     return await tg.get_webhook_info()
 
 
-
+@app.get("/")
+async def root():
+    """Health check endpoint."""
     return {"status": "ok", "version": "1.0.0", "wedge_engine": "v1"}
 
 
