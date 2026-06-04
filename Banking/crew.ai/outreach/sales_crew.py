@@ -1,4 +1,6 @@
 import os
+import asyncio
+from datetime import datetime, timedelta
 from crewai import Agent, Task, Crew, Process
 from crewai_tools import tool
 import httpx
@@ -11,18 +13,19 @@ HUBSPOT_HEADERS = {
 
 SENDGRID_KEY = os.environ["SENDGRID_API_KEY"]
 LINKEDIN_TOKEN = os.environ.get("LINKEDIN_ACCESS_TOKEN", "")
-CALENDLY_TOKEN = os.environ.get("CALENDLY_API_TOKEN", "")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "hello@awittivations.com")
 CALENDLY_LINK = os.environ.get("CALENDLY_LINK", "https://calendly.com/awittivations/intro")
+
+TOUCH_DELAYS_DAYS = {"touch_1": 0, "touch_2": 3, "touch_3": 7}
 
 
 # ── Tools ────────────────────────────────────────────────────────────────────
 
 @tool("Research lead profile")
 def research_lead(linkedin_url: str) -> dict:
-    """Fetches public profile and company data for a LinkedIn lead."""
+    """Fetches profile and company data for a LinkedIn lead."""
     resp = httpx.get(
-        "https://api.linkedin.com/v2/people/(url={linkedin_url})",
+        f"https://api.linkedin.com/v2/people/(url={linkedin_url})",
         headers={"Authorization": f"Bearer {LINKEDIN_TOKEN}"},
     )
     if resp.status_code != 200:
@@ -45,66 +48,102 @@ def get_hubspot_contact(email: str) -> dict:
 def map_services(industry: str, role: str, company_size: str) -> dict:
     """Returns Awittivations service recommendations based on lead profile."""
     mapping = {
-        "finance": ["AI Credit Scoring", "Bankit Lending Platform", "Harmonic Financial Protocol"],
-        "retail": ["Merchant Cash Advance Automation", "Bankit POS Integration"],
-        "tech": ["AI Agent Workforce", "Custom CrewAI Pipelines"],
+        "finance": ["AI Credit Scoring API", "Bankit Lending Platform", "Harmonic Financial Protocol"],
+        "nbfc":    ["AI Credit Scoring API", "WhatsApp Loan Intake Automation", "Bankit Risk Dashboard"],
+        "retail":  ["Merchant Cash Advance Automation", "Bankit POS Integration"],
+        "tech":    ["AI Agent Workforce", "Custom CrewAI Pipelines"],
     }
     matched = mapping.get(industry.lower(), ["AI-Powered SME Financial Intelligence"])
     return {"recommended_services": matched, "industry": industry, "role": role}
 
 
 @tool("Generate 3-touch outreach sequence")
-def generate_outreach(name: str, company: str, services: list[str], pain_points: str) -> dict:
-    """Produces a personalized 3-touch outreach sequence (connect, follow-up, close)."""
+def generate_outreach(name: str, company: str, services: list[str], booking_link: str) -> dict:
+    """Produces a personalized 3-touch outreach sequence with scheduled send dates."""
+    now = datetime.utcnow()
     return {
-        "touch_1": (
-            f"Hi {name}, loved what {company} is doing in your space. "
-            f"We help businesses like yours with {services[0]} — would love to connect."
-        ),
-        "touch_2": (
-            f"Hey {name}, following up — we recently helped a similar company cut loan processing "
-            f"time by 60% using {services[0]}. Happy to share how. Worth a quick call?"
-        ),
-        "touch_3": (
-            f"{name}, last note — I put together a short custom scope for {company} around "
-            f"{', '.join(services[:2])}. Can I send it over? Takes 10 min to review."
-        ),
+        "touch_1": {
+            "channel": "linkedin",
+            "send_at": now.isoformat(),
+            "subject": None,
+            "body": (
+                f"Hi {name}, great to connect! I noticed {company} is active in financial services — "
+                f"we've been helping NBFCs cut loan processing time by 60% with {services[0]}. "
+                f"Would love to share what we've built. Open to a quick chat?"
+            ),
+        },
+        "touch_2": {
+            "channel": "email",
+            "send_at": (now + timedelta(days=TOUCH_DELAYS_DAYS["touch_2"])).isoformat(),
+            "subject": f"Quick follow-up — {services[0]} for {company}",
+            "body": (
+                f"Hi {name},\n\nFollowing up on my LinkedIn note. "
+                f"We recently deployed {services[0]} for a mid-size NBFC in India — "
+                f"reduced manual underwriting by 80%.\n\n"
+                f"Here's a 30-min slot to see a live demo: {booking_link}\n\n"
+                f"Worth 30 minutes?\n\nBest,\nAwittivations"
+            ),
+        },
+        "touch_3": {
+            "channel": "email",
+            "send_at": (now + timedelta(days=TOUCH_DELAYS_DAYS["touch_3"])).isoformat(),
+            "subject": f"Custom scope for {company} — take 2 mins to review",
+            "body": (
+                f"Hi {name},\n\nLast note — I've put together a short custom scope for {company} "
+                f"covering {' and '.join(services[:2])}.\n\n"
+                f"[Proposal attached]\n\n"
+                f"Happy to walk through it: {booking_link}\n\nBest,\nAwittivations"
+            ),
+        },
     }
 
 
-@tool("Check Calendly availability and book meeting")
-def book_meeting(name: str, email: str) -> dict:
-    """Returns a personalised Calendly booking link for the lead."""
-    return {
-        "booking_link": f"{CALENDLY_LINK}?name={name}&email={email}",
-        "message": f"Book a 30-min intro call: {CALENDLY_LINK}?name={name}&email={email}",
-    }
+@tool("Generate personalised Calendly booking link")
+def book_meeting(name: str, email: str) -> str:
+    """Returns a pre-filled Calendly URL for the lead."""
+    return f"{CALENDLY_LINK}?name={name}&email={email}"
 
 
 @tool("Generate custom proposal")
 def generate_proposal(company: str, services: list[str], pain_points: str) -> str:
-    """Drafts a short custom scope/proposal for the lead."""
-    services_list = "\n".join(f"  - {s}" for s in services)
-    return f"""
-CUSTOM SCOPE — {company}
-========================
+    """Drafts a short custom scope document for the lead."""
+    services_list = "\n".join(f"  • {s}" for s in services)
+    return f"""CUSTOM SCOPE — {company}
 Prepared by Awittivations LLC
-
+==============================
 Recommended Services:
 {services_list}
 
 Approach:
-We will conduct a 2-week discovery sprint to map {company}'s current workflows,
-then deploy targeted AI agents to address: {pain_points}.
+2-week discovery sprint to map {company}'s current workflows,
+followed by targeted AI agent deployment to address: {pain_points}.
 
-Timeline: 4–6 weeks | Engagement: Retainer or project-based
-Next Step: 30-min intro call → {CALENDLY_LINK}
+Timeline  : 4–6 weeks
+Engagement: Retainer or project-based
+Next Step : {CALENDLY_LINK}
 """.strip()
 
 
-@tool("Send outreach via email")
+@tool("Send LinkedIn direct message")
+def send_linkedin_dm(recipient_linkedin_id: str, message: str) -> str:
+    """Sends a direct message to a LinkedIn member via the Messaging API."""
+    payload = {
+        "recipients": [{"person": {"~urn": f"urn:li:person:{recipient_linkedin_id}"}}],
+        "subject": "",
+        "body": message,
+        "messageType": "MEMBER_TO_MEMBER",
+    }
+    resp = httpx.post(
+        "https://api.linkedin.com/v2/messages",
+        headers={"Authorization": f"Bearer {LINKEDIN_TOKEN}", "Content-Type": "application/json"},
+        json=payload,
+    )
+    return "sent" if resp.status_code in (200, 201) else f"error: {resp.text}"
+
+
+@tool("Send email via SendGrid")
 def send_email(to_email: str, subject: str, body: str) -> str:
-    """Sends an outreach email via SendGrid."""
+    """Sends an email via SendGrid."""
     payload = {
         "personalizations": [{"to": [{"email": to_email}]}],
         "from": {"email": SENDER_EMAIL},
@@ -119,53 +158,81 @@ def send_email(to_email: str, subject: str, body: str) -> str:
     return "sent" if resp.status_code == 202 else f"error: {resp.text}"
 
 
+@tool("Schedule future outreach touches")
+def schedule_touches(touches: dict, email: str, linkedin_id: str) -> dict:
+    """Queues touch_2 and touch_3 for future delivery by storing them in HubSpot as tasks."""
+    results = {}
+    for touch_key in ("touch_2", "touch_3"):
+        touch = touches.get(touch_key, {})
+        payload = {
+            "properties": {
+                "hs_task_subject": touch.get("subject", f"Outreach {touch_key}"),
+                "hs_task_body": touch.get("body", ""),
+                "hs_task_status": "NOT_STARTED",
+                "hs_timestamp": touch.get("send_at", ""),
+            }
+        }
+        resp = httpx.post(
+            "https://api.hubapi.com/crm/v3/objects/tasks",
+            headers=HUBSPOT_HEADERS,
+            json=payload,
+        )
+        results[touch_key] = "scheduled" if resp.status_code in (200, 201) else f"error: {resp.text}"
+    return results
+
+
 # ── Agents ───────────────────────────────────────────────────────────────────
 
 lead_researcher = Agent(
     role="Lead Research Agent",
-    goal="Gather full profile and company data for a newly connected LinkedIn lead.",
-    backstory="You are a B2B intelligence specialist who builds rich lead profiles from public data.",
+    goal="Build a complete profile of the newly connected LinkedIn lead.",
+    backstory="You are a B2B intelligence specialist. You gather name, role, company, industry, and infer pain points.",
     tools=[research_lead, get_hubspot_contact],
     verbose=True,
 )
 
 value_mapper = Agent(
     role="Value Mapping Agent",
-    goal="Match Awittivations services to the lead's industry, role, and pain points.",
-    backstory="You understand Awittivations' full service suite and know which solutions resonate with which buyers.",
+    goal="Identify the top 2-3 Awittivations services that match this lead's needs.",
+    backstory="You know Awittivations' full service suite and map it precisely to NBFC and fintech buyer pain points.",
     tools=[map_services],
     verbose=True,
 )
 
 outreach_agent = Agent(
     role="Personalized Outreach Agent",
-    goal="Create a tailored 3-touch outreach sequence for the lead.",
-    backstory="You write concise, human-sounding outreach that gets replies — no generic templates.",
-    tools=[generate_outreach],
+    goal="Write a 3-touch sequence: Touch 1 (LinkedIn DM now), Touch 2 (email day 3), Touch 3 (email + proposal day 7).",
+    backstory="You write concise, human outreach that gets replies. No generic templates.",
+    tools=[generate_outreach, book_meeting],
     verbose=True,
 )
 
 scheduler = Agent(
     role="Meeting Scheduler Agent",
-    goal="Embed a personalised Calendly link into the outreach to book an intro call.",
-    backstory="You make it frictionless for leads to get on a call by pre-filling their details.",
+    goal="Embed a pre-filled Calendly link in Touch 2 and Touch 3.",
+    backstory="You reduce friction by pre-filling booking links with the lead's name and email.",
     tools=[book_meeting],
     verbose=True,
 )
 
 proposal_agent = Agent(
     role="Proposal Generator Agent",
-    goal="Create a concise custom scope document tailored to the lead's company and needs.",
-    backstory="You translate discovery insights into compelling, specific proposals.",
+    goal="Draft a concise custom scope document to attach to Touch 3.",
+    backstory="You translate service matches into compelling, specific proposals that close deals.",
     tools=[generate_proposal],
     verbose=True,
 )
 
 delivery_agent = Agent(
     role="Delivery Agent",
-    goal="Send the first outreach touch and proposal via email.",
-    backstory="You handle final delivery across channels, ensuring messages land in the right inbox.",
-    tools=[send_email],
+    goal=(
+        "Send Touch 1 via LinkedIn DM immediately. "
+        "Send Touch 2 via email on day 3. "
+        "Send Touch 3 via email with proposal on day 7. "
+        "Schedule future touches in HubSpot."
+    ),
+    backstory="You handle multi-channel delivery across LinkedIn and email, and queue follow-ups in HubSpot.",
+    tools=[send_linkedin_dm, send_email, schedule_touches],
     verbose=True,
 )
 
@@ -174,57 +241,62 @@ delivery_agent = Agent(
 
 research_task = Task(
     description=(
-        "Given a LinkedIn URL and email from a newly accepted connection, research the lead's "
-        "role, company, industry, company size, and any visible pain points."
+        "Research the lead from their LinkedIn URL and email. "
+        "Return: name, email, linkedin_id, company, industry, role, company_size, pain_points."
     ),
-    expected_output="A dict with: name, email, company, industry, role, company_size, pain_points.",
+    expected_output="A dict with the lead's full profile.",
     agent=lead_researcher,
 )
 
 value_task = Task(
-    description="Using the lead profile, identify the top 2-3 Awittivations services that fit their needs.",
-    expected_output="A list of recommended services with a one-line rationale each.",
+    description="Map the lead's industry and role to the top 2-3 Awittivations services.",
+    expected_output="List of recommended services with one-line rationale each.",
     agent=value_mapper,
     context=[research_task],
 )
 
-outreach_task = Task(
-    description="Write a personalized 3-touch outreach sequence (connect note, follow-up, close) for the lead.",
-    expected_output="Three distinct message drafts labelled touch_1, touch_2, touch_3.",
-    agent=outreach_agent,
-    context=[research_task, value_task],
-)
-
 scheduling_task = Task(
-    description="Generate a personalised Calendly booking link to embed in touch_2 of the outreach sequence.",
-    expected_output="A booking URL pre-filled with the lead's name and email.",
+    description="Generate a pre-filled Calendly booking link using the lead's name and email.",
+    expected_output="A booking URL string.",
     agent=scheduler,
     context=[research_task],
 )
 
+outreach_task = Task(
+    description=(
+        "Write all 3 touches using the lead profile, matched services, and booking link. "
+        "Touch 1: LinkedIn DM (send now). Touch 2: email (day 3). Touch 3: email + proposal (day 7)."
+    ),
+    expected_output="Dict with touch_1, touch_2, touch_3 — each with channel, send_at, subject, body.",
+    agent=outreach_agent,
+    context=[research_task, value_task, scheduling_task],
+)
+
 proposal_task = Task(
-    description="Draft a short custom scope document for the lead based on their profile and matched services.",
-    expected_output="A plain-text proposal document ready to attach or paste.",
+    description="Write a short custom scope document for the lead based on their profile and matched services.",
+    expected_output="Plain-text proposal ready to paste into Touch 3.",
     agent=proposal_agent,
     context=[research_task, value_task],
 )
 
 delivery_task = Task(
     description=(
-        "Send touch_1 of the outreach sequence to the lead's email. "
-        "Attach or reference the proposal in touch_3 when the time comes."
+        "1. Send Touch 1 via LinkedIn DM immediately.\n"
+        "2. Send Touch 2 via email (or schedule in HubSpot if not day 3 yet).\n"
+        "3. Attach the proposal to Touch 3 and schedule it in HubSpot for day 7.\n"
+        "Report delivery status for each touch."
     ),
-    expected_output="Confirmation that touch_1 email was delivered successfully.",
+    expected_output="Delivery status for touch_1, touch_2, touch_3.",
     agent=delivery_agent,
-    context=[outreach_task, scheduling_task, proposal_task],
+    context=[outreach_task, proposal_task],
 )
 
 
 # ── Crew ─────────────────────────────────────────────────────────────────────
 
 sales_crew = Crew(
-    agents=[lead_researcher, value_mapper, outreach_agent, scheduler, proposal_agent, delivery_agent],
-    tasks=[research_task, value_task, outreach_task, scheduling_task, proposal_task, delivery_task],
+    agents=[lead_researcher, value_mapper, scheduler, outreach_agent, proposal_agent, delivery_agent],
+    tasks=[research_task, value_task, scheduling_task, outreach_task, proposal_task, delivery_task],
     process=Process.sequential,
     verbose=True,
 )
