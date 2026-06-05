@@ -1,0 +1,389 @@
+"""
+Awittivations AI Orchestrator — Backend Blueprint Architecture
+FastAPI · Anthropic API · Wedge Engine v1
+
+Multi-agent coordinator for underserved entrepreneurs.
+Agents: CashPilot · Bankit · PulseAI · Orchestrator
+
+Local dev:
+    pip install -r requirements.txt
+    cp .env.example .env   # add your ANTHROPIC_API_KEY
+    uvicorn main:app --reload
+"""
+
+import os
+import json
+import hashlib
+import time
+import re
+from enum import Enum
+from typing import Optional
+from dotenv import load_dotenv
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import anthropic
+import telegram_bot as tg
+
+load_dotenv()
+
+# ─── App ─────────────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="Awittivations AI Orchestrator",
+    description="Blueprint-based multi-agent financial intelligence coordinator",
+    version="1.0.0",
+)
+
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,  # set ALLOWED_ORIGINS=https://yourapp.com in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_api_key = os.getenv("ANTHROPIC_API_KEY")
+if not _api_key:
+    raise RuntimeError("ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key.")
+client = anthropic.AsyncAnthropic(api_key=_api_key)
+
+# ─── Enums & Models ──────────────────────────────────────────────────────────
+
+class AgentType(str, Enum):
+    CASHPILOT    = "CashPilot"
+    BANKIT       = "Bankit"
+    PULSEAI      = "PulseAI"
+    ORCHESTRATOR = "Orchestrator"
+
+class BlueprintType(str, Enum):
+    DETERMINISTIC = "deterministic"
+    AGENT_LOOP    = "agent_loop"
+
+class Channel(str, Enum):
+    SMS      = "sms"
+    WHATSAPP = "whatsapp"
+    EMAIL    = "email"
+    SLACK    = "slack"
+    TELEGRAM = "telegram"
+    API      = "api"
+
+class TaskRequest(BaseModel):
+    task: str                 = Field(..., min_length=3, max_length=2000)
+    channel: Channel          = Channel.API
+    session_id: Optional[str] = None
+    history: list[dict]       = Field(default_factory=list)
+
+class WedgeResult(BaseModel):
+    passed: bool
+    flags: list[str]
+    accessibility_score: int
+    dialect_note: Optional[str]
+
+class OrchestratorResponse(BaseModel):
+    agent: AgentType
+    blueprint_type: BlueprintType
+    wedge: WedgeResult
+    requires_human_review: bool
+    review_reason: Optional[str]
+    response: str
+    confidence: int
+    actions: list[str]
+    latency_ms: int
+    blueprint_id: str
+
+# ─── Blueprints ──────────────────────────────────────────────────────────────
+
+BLUEPRINTS = {
+    AgentType.CASHPILOT: {
+        "name": "cash_flow_blueprint",
+        "type": BlueprintType.AGENT_LOOP,
+        "skills": ["runway_analysis", "payroll_forecast", "invoice_scheduling"],
+        "compliance_checks": ["no_guaranteed_returns", "no_investment_advice"],
+        "human_review_threshold": 10_000,
+    },
+    AgentType.BANKIT: {
+        "name": "rwa_bridge_blueprint",
+        "type": BlueprintType.DETERMINISTIC,
+        "skills": ["polygon_bridge", "usdc_routing", "kyc_check"],
+        "compliance_checks": ["kyc_aml", "no_guaranteed_returns", "jurisdiction_check"],
+        "human_review_threshold": 5_000,
+    },
+    AgentType.PULSEAI: {
+        "name": "market_intel_blueprint",
+        "type": BlueprintType.AGENT_LOOP,
+        "skills": ["news_retrieval", "sentiment_analysis", "smb_impact_assessment"],
+        "compliance_checks": ["no_investment_advice"],
+        "human_review_threshold": None,
+    },
+    AgentType.ORCHESTRATOR: {
+        "name": "multi_agent_blueprint",
+        "type": BlueprintType.AGENT_LOOP,
+        "skills": ["agent_routing", "onboarding", "cross_domain_synthesis"],
+        "compliance_checks": ["no_guaranteed_returns", "no_investment_advice"],
+        "human_review_threshold": None,
+    },
+}
+
+# ─── Wedge Engine v1 ─────────────────────────────────────────────────────────
+
+PROHIBITED_PHRASES = [
+    "guaranteed returns", "risk-free", "get rich quick",
+    "no risk", "guaranteed profit", "100% safe",
+    "zero risk", "certain returns",
+]
+
+JARGON_TERMS = [
+    "derivative", "securitization", "collateral", "covenant",
+    "tranche", "amortization", "subordinated", "encumbrance",
+]
+
+def run_wedge_engine(text: str) -> WedgeResult:
+    flags = []
+    lower = text.lower()
+
+    for phrase in PROHIBITED_PHRASES:
+        if phrase in lower:
+            flags.append(f'prohibited: "{phrase}"')
+
+    words = text.split()
+    avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
+    jargon_count = sum(1 for t in JARGON_TERMS if t in lower)
+    base_score = max(0, 100 - int(avg_word_len * 6) - (jargon_count * 12))
+    accessibility_score = min(100, max(0, base_score))
+
+    dialect_note = None
+    if accessibility_score < 50:
+        dialect_note = "Response complexity elevated — recommend simplification pass."
+
+    return WedgeResult(
+        passed=len(flags) == 0,
+        flags=flags,
+        accessibility_score=accessibility_score,
+        dialect_note=dialect_note,
+    )
+
+# ─── Human Review Gate ───────────────────────────────────────────────────────
+
+def needs_human_review(
+    task: str, agent: AgentType, confidence: int
+) -> tuple[bool, Optional[str]]:
+    lower = task.lower()
+
+    if any(kw in lower for kw in ["tax advice", "legal", "lawsuit", "file taxes", "irs"]):
+        return True, "Task involves legal or tax guidance — requires licensed professional review."
+
+    if any(kw in lower for kw in ["can't pay", "eviction", "bankruptcy", "losing everything", "shutting down"]):
+        return True, "User may be in financial distress — escalating for compassionate human review."
+
+    threshold = BLUEPRINTS[agent].get("human_review_threshold")
+    if threshold:
+        amounts = re.findall(r'\$[\d,]+(?:\.\d{2})?|\d[\d,]+\s*(?:dollars|USD|USDC)', task)
+        for amount_str in amounts:
+            numeric = re.sub(r'[^\d.]', '', amount_str)
+            try:
+                if float(numeric) >= threshold:
+                    return True, f"Implied transaction ≥ ${threshold:,} — requires human review per compliance policy."
+            except ValueError:
+                pass
+
+    if confidence < 50:
+        return True, "Orchestrator confidence below threshold — human review recommended."
+
+    return False, None
+
+# ─── Orchestrator System Prompt ──────────────────────────────────────────────
+
+ORCHESTRATOR_SYSTEM = """You are the Awittivations AI Orchestrator — a multi-agent financial intelligence coordinator for underserved entrepreneurs and low-income communities.
+
+Route tasks to the correct agent:
+- CashPilot: cash flow, forecasting, runway, payroll, expenses, invoicing
+- Bankit: crypto, RWA, stablecoin, on-chain payments, Polygon, USDC, wallet
+- PulseAI: financial news, market intel, interest rates, economic indicators
+- Orchestrator: multi-domain, strategy, onboarding, platform help
+
+Determine blueprint_type:
+- deterministic: compliance-critical, regulatory, large transactions, crypto
+- agent_loop: analytical, advisory, forecasting, research
+
+Generate a plain-language response for underserved entrepreneurs. No jargon. Actionable. Empowering.
+
+Respond ONLY in valid JSON — no markdown, no backticks:
+{
+  "agent": "CashPilot|Bankit|PulseAI|Orchestrator",
+  "blueprint_type": "deterministic|agent_loop",
+  "response": "Plain language response.",
+  "confidence": 85,
+  "actions": ["Action 1", "Action 2"]
+}"""
+
+# ─── Endpoints ───────────────────────────────────────────────────────────────
+
+@app.post("/orchestrate", response_model=OrchestratorResponse)
+async def orchestrate(req: TaskRequest):
+    t0 = time.time()
+
+    messages = req.history[-6:] + [
+        {"role": "user", "content": f"Channel: {req.channel.value.upper()}\nTask: {req.task}"}
+    ]
+
+    try:
+        api_response = await client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"),
+            max_tokens=1024,
+            system=ORCHESTRATOR_SYSTEM,
+            messages=messages,
+        )
+        raw = api_response.content[0].text
+    except anthropic.APIError as e:
+        raise HTTPException(status_code=503, detail=f"LLM service error: {str(e)}")
+
+    try:
+        _match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not _match:
+            raise ValueError("No JSON object found in LLM response.")
+        llm_result = json.loads(_match.group())
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=502, detail=f"Blueprint parse failed — {e}")
+
+    try:
+        agent = AgentType(llm_result["agent"])
+    except (ValueError, KeyError):
+        agent = AgentType.ORCHESTRATOR
+
+    try:
+        blueprint_type = BlueprintType(llm_result.get("blueprint_type", "agent_loop"))
+    except ValueError:
+        blueprint_type = BlueprintType.AGENT_LOOP
+
+    confidence     = int(llm_result.get("confidence", 75))
+    response_text  = llm_result.get("response", "")
+    actions        = llm_result.get("actions", [])
+
+    wedge = run_wedge_engine(response_text)
+    if not wedge.passed:
+        blueprint_type = BlueprintType.DETERMINISTIC
+
+    requires_review, review_reason = needs_human_review(req.task, agent, confidence)
+
+    latency_ms   = int((time.time() - t0) * 1000)
+    blueprint_id = hashlib.sha256(
+        f"{req.task}:{agent.value}:{t0}".encode()
+    ).hexdigest()[:16]
+
+    return OrchestratorResponse(
+        agent=agent,
+        blueprint_type=blueprint_type,
+        wedge=wedge,
+        requires_human_review=requires_review,
+        review_reason=review_reason,
+        response=response_text,
+        confidence=confidence,
+        actions=actions,
+        latency_ms=latency_ms,
+        blueprint_id=blueprint_id,
+    )
+
+
+@app.get("/blueprints")
+async def list_blueprints():
+    return {
+        agent.value: {
+            "name": config["name"],
+            "type": config["type"],
+            "skills": config["skills"],
+            "compliance_checks": config["compliance_checks"],
+            "human_review_threshold_usd": config.get("human_review_threshold"),
+        }
+        for agent, config in BLUEPRINTS.items()
+    }
+
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """
+    Telegram Bot webhook. Registered via /telegram/register-webhook.
+    Every message sent to your bot arrives here.
+    """
+    try:
+        update = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid JSON from Telegram.")
+
+    message = update.get("message") or update.get("edited_message")
+    if not message:
+        return {"ok": True}   # ignore non-message updates (joins, etc.)
+
+    chat_id  = message["chat"]["id"]
+    text     = message.get("text", "").strip()
+    username = message.get("from", {}).get("username", "user")
+
+    # Ignore commands except /start
+    if text.startswith("/start"):
+        await tg.send_message(
+            chat_id,
+            "⬡ <b>Awittivations AI Orchestrator</b>\n\n"
+            "Send me any financial question and I'll route it to the right agent:\n\n"
+            "◈ <b>CashPilot</b> — cash flow, payroll, runway\n"
+            "◎ <b>Bankit</b> — crypto, USDC, on-chain payments\n"
+            "◉ <b>PulseAI</b> — market news, interest rates\n"
+            "⬡ <b>Orchestrator</b> — strategy, onboarding\n\n"
+            "<i>Just type your question to get started.</i>",
+        )
+        return {"ok": True}
+
+    if not text or text.startswith("/"):
+        return {"ok": True}
+
+    # Show typing indicator
+    await tg.send_typing(chat_id)
+
+    # Build orchestration request
+    req = TaskRequest(
+        task=text,
+        channel=Channel.TELEGRAM,
+        session_id=str(chat_id),
+    )
+
+    try:
+        result = await orchestrate(req)
+        result_dict = result.model_dump()
+    except HTTPException as e:
+        await tg.send_message(chat_id, f"⚠ Orchestrator error: {e.detail}")
+        return {"ok": True}
+
+    if result.requires_human_review:
+        await tg.send_message(chat_id, tg.format_review_request(result_dict))
+    else:
+        await tg.send_message(chat_id, tg.format_response(result_dict))
+
+    return {"ok": True}
+
+
+@app.post("/telegram/register-webhook")
+async def register_telegram_webhook(base_url: str):
+    """
+    One-time setup: register your Railway URL as the Telegram webhook.
+    Call this once after deploying:
+      POST /telegram/register-webhook?base_url=https://your-app.railway.app
+    """
+    result = await tg.register_webhook(base_url)
+    return result
+
+
+@app.get("/telegram/webhook-info")
+async def telegram_webhook_info():
+    """Check current Telegram webhook registration."""
+    return await tg.get_webhook_info()
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {"status": "ok", "version": "1.0.0", "wedge_engine": "v1"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)

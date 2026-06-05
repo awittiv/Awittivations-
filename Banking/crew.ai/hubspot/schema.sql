@@ -33,6 +33,25 @@ CREATE TABLE IF NOT EXISTS hubspot_sync_log (
     status      TEXT CHECK (status IN ('success', 'partial', 'failed'))
 );
 
+-- Agentic Identity Store (Visa Agentic Ready Spec)
+CREATE TABLE IF NOT EXISTS agentic_identities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_name VARCHAR(50) DEFAULT 'Bankit-Alpha-01',
+    visa_agent_token TEXT,
+    logic_hash TEXT,
+    verified_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ais_program_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id UUID REFERENCES agentic_identities(id),
+    action_taken TEXT,
+    fairness_score DECIMAL(3,2),
+    validation_hash TEXT,
+    model_version VARCHAR(20) DEFAULT 'Bankit-v9.0',
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Keep updated_at current automatically
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
