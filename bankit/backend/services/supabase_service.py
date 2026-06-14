@@ -83,12 +83,22 @@ async def update_merchant(merchant_id: str, updates: dict) -> dict:
 
 async def get_repayment_history(merchant_id: str) -> list[dict]:
     client = get_client()
-    loans = client.table("loans").select("id").eq("merchant_id", merchant_id).execute()
+    loans = client.table("loans").select("id, amount_inr").eq("merchant_id", merchant_id).execute()
     if not loans.data:
         return []
     loan_ids = [l["id"] for l in loans.data]
-    txs = client.table("transactions").select("amount").in_("loan_id", loan_ids).eq("type", "repay").execute()
-    return [{"amount": tx["amount"], "status": "repaid"} for tx in (txs.data or [])]
+    txs = (
+        client.table("transactions")
+        .select("amount, loan_id, created_at")
+        .in_("loan_id", loan_ids)
+        .eq("type", "repay")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return [
+        {"amount": tx["amount"], "status": "repaid", "loan_id": tx["loan_id"], "repaid_at": tx["created_at"]}
+        for tx in (txs.data or [])
+    ]
 
 
 async def create_kyc_document(

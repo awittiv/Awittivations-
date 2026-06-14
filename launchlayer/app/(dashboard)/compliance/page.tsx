@@ -39,26 +39,34 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [s, h] = await Promise.all([
-          bankitApi.payments.sweepSummary(),
-          bankitApi.payments.sweepHistory(),
-        ]);
+  function load() {
+    setLoading(true);
+    setError("");
+    Promise.all([bankitApi.payments.sweepSummary(), bankitApi.payments.sweepHistory()])
+      .then(([s, h]) => {
         setSummary(s);
         setHistory(h);
-      } catch (e: unknown) {
+      })
+      .catch((e: unknown) => {
         setError((e as Error).message ?? "Failed to load compliance data");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="text-sm text-zinc-400">Loading...</div>;
-  if (error) return <div className="text-sm text-red-500">{error}</div>;
+  if (error) return (
+    <div className="flex flex-col items-start gap-3">
+      <p className="text-sm text-red-500">{error}</p>
+      <button
+        onClick={load}
+        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors"
+      >
+        Retry
+      </button>
+    </div>
+  );
   if (!summary) return null;
 
   const noActivity = summary.sweep_count === 0;

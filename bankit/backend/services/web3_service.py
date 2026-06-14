@@ -1,12 +1,26 @@
 import os
 import json
 import hashlib
+import logging
 from web3 import Web3
+
+logger = logging.getLogger(__name__)
 
 RPC_URL = os.getenv("POLYGON_RPC_URL", "https://rpc-amoy.polygon.technology")
 ORACLE_PUBLIC_KEY = os.getenv("ORACLE_PUBLIC_KEY", "0x0000000000000000000000000000000000000000")
 ORACLE_PRIVATE_KEY = os.getenv("ORACLE_PRIVATE_KEY", "0x" + "0" * 64)
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000000")
+
+_ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+if CONTRACT_ADDRESS == _ZERO_ADDRESS:
+    logger.warning(
+        "[Web3] CONTRACT_ADDRESS is not set — all on-chain disbursements will fail silently. "
+        "Deploy BankitLiquidityRouter and set CONTRACT_ADDRESS in your environment."
+    )
+if ORACLE_PUBLIC_KEY == _ZERO_ADDRESS or ORACLE_PRIVATE_KEY == "0x" + "0" * 64:
+    logger.warning(
+        "[Web3] ORACLE_PUBLIC_KEY / ORACLE_PRIVATE_KEY are not set — transactions cannot be signed."
+    )
 
 # ABI for BankitLiquidityRouter — the oracle calls releaseMicroLiquidity (disburse)
 # and repayLoan (on-chain repayment recording).
