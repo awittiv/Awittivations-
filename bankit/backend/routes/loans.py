@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from models.loan import CreateLoanRequest, LoanResponse
 from services import supabase_service
 from services.pipeline import run_approval_pipeline
+from services.web3_service import repay_loan_onchain
 from auth import get_current_merchant_id
 
 router = APIRouter()
@@ -39,6 +40,10 @@ async def repay_loan(loan_id: str, merchant_id: str = Depends(get_current_mercha
     if loan["status"] != "disbursed":
         raise HTTPException(status_code=400, detail=f"Loan cannot be repaid — current status: {loan['status']}")
 
-    await supabase_service.create_transaction(loan_id, loan["amount_inr"], "repay")
+    merchant = await supabase_service.get_merchant_by_id(loan["merchant_id"])
+    wallet_address = merchant.get("wallet_address") if merchant else None
+    tx_hash = await repay_loan_onchain(wallet_address, loan["amount_inr"], loan_id) if wallet_address else None
+
+    await supabase_service.create_transaction(loan_id, loan["amount_inr"], "repay", tx_hash)
     updated = await supabase_service.update_loan(loan_id, {"status": "repaid"})
     return updated

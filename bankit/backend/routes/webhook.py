@@ -3,6 +3,7 @@ from fastapi import APIRouter, BackgroundTasks
 from services import supabase_service, whatsapp_parser
 from services.whatsapp_sender import send_whatsapp
 from services.whatsapp_pipeline import run_pipeline_and_notify
+from services.web3_service import repay_loan_onchain
 
 router = APIRouter()
 
@@ -72,7 +73,10 @@ async def _handle_repay(merchant: dict, phone: str) -> dict:
         return {"status": "no_active_loan", "reply": reply}
 
     loan = disbursed[0]
-    await supabase_service.create_transaction(loan["id"], loan["amount_inr"], "repay")
+    wallet_address = merchant.get("wallet_address")
+    tx_hash = await repay_loan_onchain(wallet_address, loan["amount_inr"], loan["id"]) if wallet_address else None
+
+    await supabase_service.create_transaction(loan["id"], loan["amount_inr"], "repay", tx_hash)
     await supabase_service.update_loan(loan["id"], {"status": "repaid"})
 
     reply = (

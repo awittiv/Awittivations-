@@ -23,6 +23,12 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 export const bankitApi = {
+  payments: {
+    sweepSummary: () => apiFetch<SweepSummary>("/payments/sweep-summary"),
+    sweepHistory: () => apiFetch<SweepRecord[]>("/payments/sweep-history"),
+    ingest: (data: { gross_amount: number; source: string; reference_id?: string }) =>
+      apiFetch("/payments/ingest", { method: "POST", body: JSON.stringify(data) }),
+  },
   loans: {
     list: () => apiFetch<LoanResponse[]>("/loans"),
     get: (id: string) => apiFetch<LoanResponse>(`/loans/${id}`),
@@ -85,6 +91,32 @@ export interface AdminLoan extends LoanResponse {
     phone: string | null;
     wallet_address: string | null;
   } | null;
+}
+
+export interface SweepSummary {
+  ytd_gross: number;
+  ytd_withheld: number;
+  ytd_net: number;
+  ytd_mi_state: number;
+  ytd_muskegon: number;
+  ytd_federal: number;
+  w2g_threshold_reached: boolean;
+  sweep_count: number;
+}
+
+export interface SweepRecord {
+  id: string;
+  merchant_id: string;
+  gross_amount: number;
+  mi_state_withholding: number;
+  muskegon_city_withholding: number;
+  federal_withholding: number;
+  net_amount: number;
+  source: string;
+  reference_id: string | null;
+  sweep_status: string;
+  tx_hash: string | null;
+  created_at: string;
 }
 
 export interface KycDocSubmit {
