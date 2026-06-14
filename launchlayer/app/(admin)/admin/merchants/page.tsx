@@ -46,7 +46,11 @@ export default async function AdminMerchantsPage() {
                 const count = docCounts[m.id] ?? 0;
                 return (
                   <tr key={m.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50">
-                    <td className="px-4 py-3 text-zinc-900 font-medium">{m.business_name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/admin/merchants/${m.id}`} className="text-zinc-900 hover:underline">
+                        {m.business_name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-zinc-600">{m.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
                       {m.wallet_address ? m.wallet_address.slice(0, 10) + "…" : "—"}

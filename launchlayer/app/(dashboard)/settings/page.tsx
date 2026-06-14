@@ -65,14 +65,20 @@ export default function SettingsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setMessage("");
+
+    if (walletAddress && !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
+      setMessage("Wallet address must be a valid Polygon/Ethereum address (0x followed by 40 hex characters).");
+      return;
+    }
+
+    setSaving(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase
       .from("merchants")
-      .update({ business_name: businessName, phone, wallet_address: walletAddress })
+      .update({ business_name: businessName, phone, wallet_address: walletAddress || null })
       .eq("user_id", user.id);
     setSaving(false);
     setMessage(error ? error.message : "Saved successfully.");

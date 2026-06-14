@@ -137,7 +137,13 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             except Exception as sweep_err:
                 print(f"[Pipeline] Loan {loan_id} — Atomic Sweep failed (non-blocking): {sweep_err}")
         else:
+            reason = "On-chain disbursement returned no tx_hash — RPC or contract error"
+            await supabase_service.update_loan(loan_id, {"error_reason": reason})
             print(f"[Pipeline] Loan {loan_id} approved but on-chain disbursement failed")
 
     except Exception as e:
         print(f"[Pipeline] Error processing loan {loan_id}: {e}")
+        try:
+            await supabase_service.update_loan(loan_id, {"error_reason": str(e)[:500]})
+        except Exception:
+            pass
