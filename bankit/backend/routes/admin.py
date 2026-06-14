@@ -73,9 +73,18 @@ async def list_all_merchants(_: str = Depends(get_admin_user_id)):
 
 
 class KycUpdate(BaseModel):
-    status: Literal["pending", "verified", "rejected"]
+    status: Literal["pending", "under_review", "verified", "rejected"]
 
 
 @router.patch("/merchants/{merchant_id}/kyc")
 async def update_kyc(merchant_id: str, body: KycUpdate, _: str = Depends(get_admin_user_id)):
     return await supabase_service.update_merchant(merchant_id, {"kyc_status": body.status})
+
+
+@router.get("/merchants/{merchant_id}/kyc-docs")
+async def get_merchant_kyc_docs(merchant_id: str, _: str = Depends(get_admin_user_id)):
+    docs = await supabase_service.get_kyc_documents(merchant_id)
+    return [
+        {**doc, "signed_url": supabase_service.get_signed_kyc_url(doc["storage_path"])}
+        for doc in docs
+    ]

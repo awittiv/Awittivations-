@@ -33,6 +33,10 @@ export const bankitApi = {
   },
   merchants: {
     get: (id: string) => apiFetch<MerchantResponse>(`/merchants/${id}`),
+    submitKycDoc: (id: string, data: KycDocSubmit) =>
+      apiFetch(`/merchants/${id}/kyc/submit`, { method: "POST", body: JSON.stringify(data) }),
+    listKycDocs: (id: string) =>
+      apiFetch<KycDocument[]>(`/merchants/${id}/kyc/documents`),
   },
   admin: {
     loans: {
@@ -81,4 +85,20 @@ export interface AdminLoan extends LoanResponse {
     phone: string | null;
     wallet_address: string | null;
   } | null;
+}
+
+export interface KycDocSubmit {
+  doc_type: "aadhaar" | "pan" | "gst";
+  storage_path: string;
+  file_name: string;
+}
+
+export interface KycDocument {
+  id: string;
+  merchant_id: string;
+  doc_type: "aadhaar" | "pan" | "gst";
+  storage_path: string;
+  file_name: string;
+  signed_url: string;
+  created_at: string;
 }

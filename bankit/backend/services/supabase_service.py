@@ -89,3 +89,33 @@ async def get_repayment_history(merchant_id: str) -> list[dict]:
     loan_ids = [l["id"] for l in loans.data]
     txs = client.table("transactions").select("amount").in_("loan_id", loan_ids).eq("type", "repay").execute()
     return [{"amount": tx["amount"], "status": "repaid"} for tx in (txs.data or [])]
+
+
+async def create_kyc_document(
+    merchant_id: str, doc_type: str, storage_path: str, file_name: str
+) -> dict:
+    client = get_client()
+    result = client.table("kyc_documents").upsert(
+        {"merchant_id": merchant_id, "doc_type": doc_type, "storage_path": storage_path, "file_name": file_name},
+        on_conflict="merchant_id,doc_type",
+    ).execute()
+    return result.data[0]
+
+
+async def get_kyc_documents(merchant_id: str) -> list[dict]:
+    client = get_client()
+    result = client.table("kyc_documents").select("*").eq("merchant_id", merchant_id).order("created_at").execute()
+    return result.data or []
+
+
+def get_signed_kyc_url(storage_path: str) -> str:
+    client = get_client()
+    try:
+        result = client.storage.from_("kyc-docs").create_signed_url(storage_path, 3600)
+        if hasattr(result, "signed_url"):
+            return result.signed_url or ""
+        if isinstance(result, dict):
+            return (result.get("data") or {}).get("signedURL", "") or result.get("signedURL", "")
+    except Exception:
+        pass
+    return ""

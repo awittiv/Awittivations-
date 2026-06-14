@@ -1,12 +1,24 @@
+import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminKycSelect from "@/components/AdminKycSelect";
 
 export default async function AdminMerchantsPage() {
   const supabase = createAdminClient();
+
   const { data: merchants } = await supabase
     .from("merchants")
     .select("*")
     .order("created_at", { ascending: false });
+
+  // Fetch kyc doc counts for all merchants
+  const { data: kycDocs } = await supabase
+    .from("kyc_documents")
+    .select("merchant_id, doc_type");
+
+  const docCounts = (kycDocs ?? []).reduce<Record<string, number>>((acc, d) => {
+    acc[d.merchant_id] = (acc[d.merchant_id] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div>
@@ -22,7 +34,7 @@ export default async function AdminMerchantsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100">
-                {["Business", "Phone", "Wallet", "KYC Status", "Joined"].map((h) => (
+                {["Business", "Phone", "Wallet", "KYC Status", "Docs", "Joined"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wide">
                     {h}
                   </th>
@@ -30,19 +42,34 @@ export default async function AdminMerchantsPage() {
               </tr>
             </thead>
             <tbody>
-              {merchants.map((m) => (
-                <tr key={m.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50">
-                  <td className="px-4 py-3 text-zinc-900 font-medium">{m.business_name}</td>
-                  <td className="px-4 py-3 text-zinc-600">{m.phone ?? "—"}</td>
-                  <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
-                    {m.wallet_address ? m.wallet_address.slice(0, 10) + "…" : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <AdminKycSelect merchantId={m.id} current={m.kyc_status ?? "pending"} />
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">{new Date(m.created_at).toLocaleDateString("en-IN")}</td>
-                </tr>
-              ))}
+              {merchants.map((m) => {
+                const count = docCounts[m.id] ?? 0;
+                return (
+                  <tr key={m.id} className="border-b border-zinc-50 last:border-0 hover:bg-zinc-50">
+                    <td className="px-4 py-3 text-zinc-900 font-medium">{m.business_name}</td>
+                    <td className="px-4 py-3 text-zinc-600">{m.phone ?? "—"}</td>
+                    <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
+                      {m.wallet_address ? m.wallet_address.slice(0, 10) + "…" : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <AdminKycSelect merchantId={m.id} current={m.kyc_status ?? "pending"} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {count > 0 ? (
+                        <Link
+                          href={`/admin/merchants/${m.id}/kyc`}
+                          className="text-xs text-blue-600 hover:underline font-medium"
+                        >
+                          {count}/3 docs
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-zinc-400">None</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400">{new Date(m.created_at).toLocaleDateString("en-IN")}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

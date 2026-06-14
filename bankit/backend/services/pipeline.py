@@ -12,6 +12,17 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             print(f"[Pipeline] Merchant {merchant_id} not found")
             return
 
+        # ── KYC Gate ────────────────────────────────────────────────────────────
+        kyc_status = merchant.get("kyc_status", "pending")
+        if kyc_status != "verified":
+            if kyc_status == "pending":
+                await supabase_service.update_loan(loan_id, {"status": "rejected"})
+                print(f"[Pipeline] Loan {loan_id} rejected — KYC documents not submitted")
+            else:
+                # under_review: docs submitted but admin hasn't verified yet
+                print(f"[Pipeline] Loan {loan_id} held for human review — KYC status: {kyc_status}")
+            return
+
         created_at = merchant.get("created_at")
         if created_at:
             created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
