@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from services import supabase_service
 from services.trust_score import score_loan_request
+from services.corridor_service import run_corridor_check
 from services.web3_service import release_micro_liquidity, build_trust_score_hash
 
 
@@ -24,7 +25,8 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
 
         repayment_history = await supabase_service.get_repayment_history(merchant_id)
 
-        result = await score_loan_request(
+        # ── Stage 1: AI Trust Score ─────────────────────────────────────────
+        ai_result = await score_loan_request(
             amount_inr=loan["amount_inr"],
             purpose=loan["purpose"],
             business_name=merchant.get("business_name", "Unknown"),
@@ -32,18 +34,69 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             merchant_age_days=merchant_age_days,
         )
 
-        await supabase_service.update_loan(loan_id, {"trust_score": result.score})
-        print(f"[Pipeline] Loan {loan_id} scored {result.score} → {result.recommendation}")
+        await supabase_service.update_loan(loan_id, {"trust_score": ai_result.score})
+        print(f"[Pipeline] Loan {loan_id} — AI score: {ai_result.score} ({ai_result.recommendation})")
 
-        if result.recommendation == "reject":
+        # Hard reject: corridor cannot override
+        if ai_result.recommendation == "reject":
             await supabase_service.update_loan(loan_id, {"status": "rejected"})
+            print(f"[Pipeline] Loan {loan_id} rejected by AI scorer")
             return
 
-        if result.recommendation == "review":
-            # Score saved, stays pending for human review
-            return
+        # ── Stage 2: Corridor Intelligence Pass ─────────────────────────────
+        corridor_passport = await run_corridor_check(
+            loan_id=loan_id,
+            merchant_id=merchant_id,
+            amount_inr=loan["amount_inr"],
+            repayment_history=repayment_history,
+            trust_score=ai_result.score,
+        )
 
-        # Approve
+        corridor_status = corridor_passport.get("status", "FLAGGED")
+        corridor_risk = (
+            corridor_passport
+            .get("passport_metadata", {})
+            .get("credit_metrics", {})
+            .get("risk_tier", "MEDIUM")
+        )
+        corridor_provenance = (
+            corridor_passport
+            .get("passport_metadata", {})
+            .get("provenance_metrics", {})
+            .get("provenance_status", "FAILED")
+        )
+
+        print(
+            f"[Pipeline] Loan {loan_id} — Corridor: {corridor_status} "
+            f"(risk={corridor_risk}, provenance={corridor_provenance})"
+        )
+
+        # ── Stage 3: Combined Decision Matrix ───────────────────────────────
+        #
+        # AI=review + corridor APPROVED + LOW risk  → upgrade to approve
+        # AI=review + anything else                 → stays pending (human review)
+        # AI=approve + corridor APPROVED             → approve → disburse
+        # AI=approve + corridor FLAGGED              → downgrade to review
+        #
+        if ai_result.recommendation == "review":
+            if corridor_status == "APPROVED" and corridor_risk == "LOW":
+                print(f"[Pipeline] Loan {loan_id} upgraded review→approve by corridor")
+                final_decision = "approve"
+            else:
+                print(f"[Pipeline] Loan {loan_id} flagged for human review (AI=review, corridor={corridor_status})")
+                return  # stays pending
+        else:
+            # AI recommended approve
+            if corridor_status == "APPROVED":
+                final_decision = "approve"
+            else:
+                print(
+                    f"[Pipeline] Loan {loan_id} downgraded approve→review by corridor "
+                    f"(risk={corridor_risk}, provenance={corridor_provenance})"
+                )
+                return  # downgraded to human review, stays pending
+
+        # ── Stage 4: Approve + Disburse ─────────────────────────────────────
         await supabase_service.update_loan(loan_id, {"status": "approved"})
 
         wallet_address = merchant.get("wallet_address")
@@ -51,7 +104,7 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             print(f"[Pipeline] Loan {loan_id} approved — no wallet address, skipping disbursement")
             return
 
-        trust_score_hash = build_trust_score_hash(loan_id, result.score, result.reasoning)
+        trust_score_hash = build_trust_score_hash(loan_id, ai_result.score, ai_result.reasoning)
         tx_hash = await release_micro_liquidity(wallet_address, loan["amount_inr"], trust_score_hash)
 
         if tx_hash:
@@ -59,7 +112,6 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             await supabase_service.create_transaction(loan_id, loan["amount_inr"], "disburse", tx_hash)
             print(f"[Pipeline] Loan {loan_id} disbursed — tx {tx_hash}")
         else:
-            # Stays approved; disbursement can be retried manually
             print(f"[Pipeline] Loan {loan_id} approved but on-chain disbursement failed")
 
     except Exception as e:
