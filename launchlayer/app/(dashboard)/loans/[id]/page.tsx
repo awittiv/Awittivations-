@@ -82,6 +82,13 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               </div>
             ))}
           </dl>
+
+          {loan.error_reason && (
+            <div className="mt-4 pt-4 border-t border-zinc-100">
+              <p className="text-xs font-medium text-red-600">Processing note</p>
+              <p className="text-xs text-red-500 mt-0.5">{loan.error_reason}</p>
+            </div>
+          )}
         </div>
 
         {/* Transactions */}

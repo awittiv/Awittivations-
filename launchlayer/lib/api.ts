@@ -38,6 +38,7 @@ export const bankitApi = {
       apiFetch<LoanResponse>(`/loans/${id}/repay`, { method: "POST" }),
   },
   merchants: {
+    me: () => apiFetch<MerchantResponse>("/merchants/me"),
     get: (id: string) => apiFetch<MerchantResponse>(`/merchants/${id}`),
     submitKycDoc: (id: string, data: KycDocSubmit) =>
       apiFetch(`/merchants/${id}/kyc/submit`, { method: "POST", body: JSON.stringify(data) }),
@@ -67,6 +68,7 @@ export interface LoanResponse {
   status: "pending" | "approved" | "disbursed" | "repaid" | "rejected";
   trust_score: number | null;
   tx_hash: string | null;
+  error_reason: string | null;
   created_at: string;
 }
 

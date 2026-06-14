@@ -1,11 +1,20 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Literal
 from auth_admin import get_admin_user_id
 from services import supabase_service
 from services.web3_service import release_micro_liquidity, build_trust_score_hash
+from services.sweep_engine import execute_atomic_sweep
+from services.whatsapp_sender import send_whatsapp
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+
+async def _notify_merchant(merchant_id: str, message: str) -> None:
+    merchant = await supabase_service.get_merchant_by_id(merchant_id)
+    phone = merchant.get("phone") if merchant else None
+    if phone:
+        await send_whatsapp(phone, message)
 
 
 @router.get("/loans")
@@ -21,32 +30,68 @@ async def list_all_loans(_: str = Depends(get_admin_user_id)):
 
 
 @router.post("/loans/{loan_id}/approve")
-async def approve_loan(loan_id: str, _: str = Depends(get_admin_user_id)):
+async def approve_loan(
+    loan_id: str,
+    background_tasks: BackgroundTasks,
+    _: str = Depends(get_admin_user_id),
+):
     loan = await supabase_service.get_loan_by_id(loan_id)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
     if loan["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Cannot approve loan with status: {loan['status']}")
-    return await supabase_service.update_loan(loan_id, {"status": "approved"})
+
+    updated = await supabase_service.update_loan(loan_id, {"status": "approved"})
+
+    msg = (
+        f"✅ *Loan Approved!*\n"
+        f"Your application for ₹{float(loan['amount_inr']):,.0f} has been approved by our team.\n"
+        f"Funds are being processed for disbursement to your wallet."
+    )
+    background_tasks.add_task(_notify_merchant, loan["merchant_id"], msg)
+    return updated
 
 
 @router.post("/loans/{loan_id}/reject")
-async def reject_loan(loan_id: str, _: str = Depends(get_admin_user_id)):
+async def reject_loan(
+    loan_id: str,
+    background_tasks: BackgroundTasks,
+    _: str = Depends(get_admin_user_id),
+):
     loan = await supabase_service.get_loan_by_id(loan_id)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
     if loan["status"] not in ("pending", "approved"):
         raise HTTPException(status_code=400, detail=f"Cannot reject loan with status: {loan['status']}")
-    return await supabase_service.update_loan(loan_id, {"status": "rejected"})
+
+    updated = await supabase_service.update_loan(loan_id, {"status": "rejected"})
+
+    score = loan.get("trust_score")
+    score_str = f"{score}/100" if score is not None else "N/A"
+    msg = (
+        f"❌ *Application Not Approved*\n"
+        f"Your request for ₹{float(loan['amount_inr']):,.0f} was not approved at this time.\n"
+        f"Trust Score: {score_str}\n\n"
+        f"Maintaining regular repayments improves your score for future applications."
+    )
+    background_tasks.add_task(_notify_merchant, loan["merchant_id"], msg)
+    return updated
 
 
 @router.post("/loans/{loan_id}/disburse")
-async def disburse_loan(loan_id: str, _: str = Depends(get_admin_user_id)):
+async def disburse_loan(
+    loan_id: str,
+    background_tasks: BackgroundTasks,
+    _: str = Depends(get_admin_user_id),
+):
     loan = await supabase_service.get_loan_by_id(loan_id)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
     if loan["status"] != "approved":
-        raise HTTPException(status_code=400, detail=f"Loan must be approved to disburse, current status: {loan['status']}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Loan must be approved to disburse, current status: {loan['status']}",
+        )
 
     merchant = await supabase_service.get_merchant_by_id(loan["merchant_id"])
     wallet_address = merchant.get("wallet_address") if merchant else None
@@ -58,10 +103,33 @@ async def disburse_loan(loan_id: str, _: str = Depends(get_admin_user_id)):
     tx_hash = await release_micro_liquidity(wallet_address, loan["amount_inr"], trust_score_hash)
 
     if not tx_hash:
-        raise HTTPException(status_code=502, detail="On-chain disbursement failed — check wallet balance and RPC connection")
+        raise HTTPException(
+            status_code=502,
+            detail="On-chain disbursement failed — check wallet balance and RPC connection",
+        )
 
     await supabase_service.update_loan(loan_id, {"status": "disbursed", "tx_hash": tx_hash})
     await supabase_service.create_transaction(loan_id, loan["amount_inr"], "disburse", tx_hash)
+
+    # Atomic Sweep on admin-triggered disbursal (non-blocking)
+    background_tasks.add_task(
+        execute_atomic_sweep,
+        loan["merchant_id"],
+        wallet_address,
+        float(loan["amount_inr"]),
+        "loan_disbursal",
+        loan_id,
+    )
+
+    tx_preview = tx_hash[:20] + "..."
+    msg = (
+        f"💸 *Funds Disbursed!*\n"
+        f"₹{float(loan['amount_inr']):,.0f} has been sent to your Polygon wallet.\n"
+        f"TX: {tx_preview}\n\n"
+        f"Reply *STATUS* to check your loan or *REPAY* when ready to repay."
+    )
+    background_tasks.add_task(_notify_merchant, loan["merchant_id"], msg)
+
     return await supabase_service.get_loan_by_id(loan_id)
 
 

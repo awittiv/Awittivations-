@@ -8,6 +8,14 @@ from auth import get_current_merchant_id
 router = APIRouter()
 
 
+@router.get("/merchants/me", response_model=MerchantResponse)
+async def get_my_merchant(current_merchant_id: str = Depends(get_current_merchant_id)):
+    merchant = await supabase_service.get_merchant_by_id(current_merchant_id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    return merchant
+
+
 @router.get("/merchants/{merchant_id}", response_model=MerchantResponse)
 async def get_merchant(
     merchant_id: str,
