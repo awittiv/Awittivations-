@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Command Center</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; padding: 20px; }
+        .project-card { margin-bottom: 24px; }
+        .item-list { max-height: 300px; overflow-y: auto; }
+        .item { margin-bottom: 8px; padding: 8px 12px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; }
+        .item p { margin-bottom: 2px; }
+        .item-file { font-size: 0.75em; color: #888; word-break: break-all; }
+        .item-date { font-size: 0.75em; color: #aaa; }
+        .category-label { font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin-top: 12px; }
+        .last-scan { font-size: 0.8em; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <h1 class="h3 mb-0">Project Command Center</h1>
+            <div class="d-flex align-items-center gap-3">
+                {% if last_scan %}
+                <span class="last-scan">Last scanned: {{ last_scan }}</span>
+                {% endif %}
+                <a href="?refresh=1" class="btn btn-primary btn-sm">Refresh Scan</a>
+            </div>
+        </div>
+
+        {% if not projects %}
+        <div class="alert alert-info">No items found. Click <strong>Refresh Scan</strong> to scan your project folders.</div>
+        {% endif %}
+
+        {% for project_name, data in projects.items() %}
+        <div class="card project-card shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="h6 mb-0">{{ project_name }}</h2>
+                {% set total = data.values() | map('length') | sum %}
+                <span class="badge bg-secondary">{{ total }} items</span>
+            </div>
+            <div class="card-body">
+                {% set categories = [
+                    ('milestones', 'Milestones', 'success'),
+                    ('tasks', 'Tasks', 'primary'),
+                    ('todos', 'To-Dos', 'warning'),
+                    ('build_notes', 'Build Notes', 'info'),
+                    ('statuses', 'Statuses', 'secondary'),
+                    ('opens', 'Open', 'danger'),
+                    ('pendings', 'Pending', 'dark'),
+                    ('iso20022s', 'Transactions (ISO 20022)', 'primary')
+                ] %}
+                {% for key, label, color in categories %}
+                {% if data[key] %}
+                <div class="category-label">
+                    <span class="badge bg-{{ color }} me-1">{{ data[key] | length }}</span>{{ label }}
+                </div>
+                <div class="item-list mb-2">
+                    {% for item in data[key] %}
+                    <div class="item">
+                        <p>{{ item.content }}</p>
+                        <div class="item-file">{{ item.file }}</div>
+                        <div class="item-date">{{ item.date }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        setTimeout(function() { window.location.href = '?refresh=1'; }, 300000);
+    </script>
+</body>
+</html>
