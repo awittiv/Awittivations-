@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from models.loan import CreateLoanRequest, LoanResponse
 from services import supabase_service
 from services.pipeline import run_approval_pipeline
-from services.web3_service import repay_loan_onchain
+from services.web3_service import repay_loan_onchain, update_credit_passport, get_passport_token_id
 from auth import get_current_merchant_id
 
 router = APIRouter()
@@ -46,4 +46,17 @@ async def repay_loan(loan_id: str, merchant_id: str = Depends(get_current_mercha
 
     await supabase_service.create_transaction(loan_id, loan["amount_inr"], "repay", tx_hash)
     updated = await supabase_service.update_loan(loan_id, {"status": "repaid"})
+
+    # Update on-chain credit passport: mark repayment, boost score signal
+    if get_passport_token_id(merchant_id):
+        current_score = loan.get("trust_score") or 50
+        repayment_boost = min(100, current_score + 8)
+        background_tasks.add_task(
+            update_credit_passport,
+            merchant_id,
+            repayment_boost,
+            True,
+            float(loan["amount_inr"]),
+        )
+
     return updated

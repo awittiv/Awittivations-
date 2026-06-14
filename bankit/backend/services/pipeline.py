@@ -3,7 +3,7 @@ from services import supabase_service
 from services.trust_score import score_loan_request
 from services.corridor_service import run_corridor_check
 from services.sweep_engine import execute_atomic_sweep
-from services.web3_service import release_micro_liquidity, build_trust_score_hash
+from services.web3_service import release_micro_liquidity, build_trust_score_hash, mint_credit_passport, update_credit_passport, get_passport_token_id
 
 
 async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
@@ -136,6 +136,22 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
                 print(f"[Pipeline] Loan {loan_id} — Atomic Sweep recorded")
             except Exception as sweep_err:
                 print(f"[Pipeline] Loan {loan_id} — Atomic Sweep failed (non-blocking): {sweep_err}")
+
+            # ── Credit Passport: mint on first approval, update thereafter ──
+            try:
+                existing_token = get_passport_token_id(merchant_id)
+                if existing_token is None:
+                    passport_tx = await mint_credit_passport(
+                        wallet_address, merchant_id, ai_result.score
+                    )
+                    print(f"[Pipeline] Loan {loan_id} — Credit Passport minted (tx {passport_tx})")
+                else:
+                    passport_tx = await update_credit_passport(
+                        merchant_id, ai_result.score, loan_repaid=False
+                    )
+                    print(f"[Pipeline] Loan {loan_id} — Credit Passport updated (tx {passport_tx})")
+            except Exception as passport_err:
+                print(f"[Pipeline] Loan {loan_id} — Passport update failed (non-blocking): {passport_err}")
         else:
             reason = "On-chain disbursement returned no tx_hash — RPC or contract error"
             await supabase_service.update_loan(loan_id, {"error_reason": reason})

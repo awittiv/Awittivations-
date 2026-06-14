@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Literal
 from models.loan import MerchantResponse
 from services import supabase_service
+from services.web3_service import get_passport_token_id, PASSPORT_ADDRESS, _ZERO_ADDRESS
 from auth import get_current_merchant_id
 
 router = APIRouter()
@@ -53,6 +54,31 @@ async def submit_kyc_doc(
         await supabase_service.update_merchant(merchant_id, {"kyc_status": "under_review"})
 
     return {"status": "submitted", "doc_type": body.doc_type}
+
+
+@router.get("/merchants/{merchant_id}/passport")
+async def get_credit_passport(
+    merchant_id: str,
+    current_merchant_id: str = Depends(get_current_merchant_id),
+):
+    """Return the merchant's on-chain Bankit Credit Passport metadata."""
+    if merchant_id != current_merchant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    token_id = get_passport_token_id(merchant_id)
+    if token_id is None:
+        return {
+            "has_passport": False,
+            "message": "No Credit Passport yet — complete a loan to earn your on-chain credit identity.",
+        }
+    polygonscan_base = "https://amoy.polygonscan.com/token"
+    return {
+        "has_passport": True,
+        "token_id": token_id,
+        "contract_address": PASSPORT_ADDRESS,
+        "polygonscan_url": f"{polygonscan_base}/{PASSPORT_ADDRESS}?a={token_id}",
+        "standard": "ERC-721 / ERC-5192 Soulbound",
+        "chain": "Polygon Amoy",
+    }
 
 
 @router.get("/merchants/{merchant_id}/kyc/documents")
