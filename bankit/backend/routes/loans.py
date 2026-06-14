@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from models.loan import CreateLoanRequest, LoanResponse
 from services import supabase_service
+from services.pipeline import run_approval_pipeline
 from auth import get_current_merchant_id
 
 router = APIRouter()
@@ -14,9 +15,11 @@ async def list_loans(merchant_id: str = Depends(get_current_merchant_id)):
 @router.post("/loans", response_model=LoanResponse, status_code=201)
 async def create_loan(
     body: CreateLoanRequest,
+    background_tasks: BackgroundTasks,
     merchant_id: str = Depends(get_current_merchant_id),
 ):
     loan = await supabase_service.create_loan(merchant_id, body.amount_inr, body.purpose)
+    background_tasks.add_task(run_approval_pipeline, loan["id"], merchant_id)
     return loan
 
 
