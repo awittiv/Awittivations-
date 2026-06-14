@@ -46,7 +46,7 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             merchant_age_days=merchant_age_days,
         )
 
-        await supabase_service.update_loan(loan_id, {"trust_score": ai_result.score})
+        await supabase_service.update_loan(loan_id, {"trust_score": ai_result.score, "ai_reasoning": ai_result.reasoning})
         print(f"[Pipeline] Loan {loan_id} — AI score: {ai_result.score} ({ai_result.recommendation})")
 
         # Hard reject: corridor cannot override

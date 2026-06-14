@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import RepayButton from "@/components/RepayButton";
 
+const POLYGONSCAN_TX = "https://amoy.polygonscan.com/tx";
+
 const statusColors: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
   approved: "bg-blue-100 text-blue-800",
@@ -70,17 +72,33 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         {/* Loan details */}
         <div className="bg-white rounded-xl border border-zinc-200 p-5">
           <h2 className="text-sm font-semibold text-zinc-900 mb-4">Loan Details</h2>
-          <dl className="flex flex-col gap-3">
-            {[
-              { label: "Amount", value: `₹${Number(loan.amount_inr).toLocaleString("en-IN")}` },
-              { label: "Trust Score", value: loan.trust_score ? `${loan.trust_score}/100` : "Pending" },
-              { label: "Blockchain TX", value: loan.tx_hash ? loan.tx_hash.slice(0, 20) + "..." : "—" },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex justify-between text-sm">
-                <dt className="text-zinc-500">{label}</dt>
-                <dd className="text-zinc-900 font-medium font-mono">{value}</dd>
-              </div>
-            ))}
+          <dl className="flex flex-col gap-3 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-zinc-500">Amount</dt>
+              <dd className="text-zinc-900 font-medium">₹{Number(loan.amount_inr).toLocaleString("en-IN")}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-zinc-500">Trust Score</dt>
+              <dd className="text-zinc-900 font-medium">{loan.trust_score ? `${loan.trust_score}/100` : "Pending"}</dd>
+            </div>
+            <div className="flex justify-between items-center">
+              <dt className="text-zinc-500">Blockchain TX</dt>
+              <dd className="font-mono text-xs">
+                {loan.tx_hash ? (
+                  <Link
+                    href={`${POLYGONSCAN_TX}/${loan.tx_hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                    title={loan.tx_hash}
+                  >
+                    {loan.tx_hash.slice(0, 18)}…
+                  </Link>
+                ) : (
+                  <span className="text-zinc-400">—</span>
+                )}
+              </dd>
+            </div>
           </dl>
 
           {loan.error_reason && (

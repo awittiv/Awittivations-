@@ -12,15 +12,22 @@ from services import supabase_service
 logger = logging.getLogger(__name__)
 
 
-def _decision_message(status: str, amount_inr: float, trust_score: int | None, tx_hash: str | None) -> str:
+def _decision_message(
+    status: str,
+    amount_inr: float,
+    trust_score: int | None,
+    tx_hash: str | None,
+    ai_reasoning: str | None = None,
+) -> str:
     score_str = f"{trust_score}/100" if trust_score is not None else "N/A"
+    reasoning_line = f"\n_{ai_reasoning}_" if ai_reasoning else ""
 
     if status == "disbursed":
         tx_preview = (tx_hash[:20] + "...") if tx_hash else "pending"
         return (
             f"✅ *Loan Approved & Disbursed!*\n"
             f"₹{amount_inr:,.0f} is on its way to your wallet.\n"
-            f"Trust Score: {score_str}\n"
+            f"Trust Score: {score_str}{reasoning_line}\n"
             f"TX: {tx_preview}\n\n"
             f"Reply *STATUS* to check your loan or *REPAY* when ready to repay."
         )
@@ -28,13 +35,13 @@ def _decision_message(status: str, amount_inr: float, trust_score: int | None, t
         return (
             f"✅ *Loan Approved!*\n"
             f"₹{amount_inr:,.0f} approved. Disbursement is being processed.\n"
-            f"Trust Score: {score_str}"
+            f"Trust Score: {score_str}{reasoning_line}"
         )
     if status == "rejected":
         return (
             f"❌ *Application Not Approved*\n"
             f"Your request for ₹{amount_inr:,.0f} was not approved this time.\n"
-            f"Trust Score: {score_str}\n\n"
+            f"Trust Score: {score_str}{reasoning_line}\n\n"
             f"Tip: Maintaining regular repayments improves your score for next time."
         )
     # pending — under human review
@@ -66,6 +73,7 @@ async def run_pipeline_and_notify(
             amount_inr=amount_inr,
             trust_score=loan.get("trust_score"),
             tx_hash=loan.get("tx_hash"),
+            ai_reasoning=loan.get("ai_reasoning"),
         )
 
         await supabase_service.add_loan_message(loan_id, "outbound", message)
