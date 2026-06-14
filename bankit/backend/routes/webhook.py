@@ -1,9 +1,14 @@
-from fastapi import APIRouter, BackgroundTasks
+import os
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Form, Request, HTTPException
 
 from services import supabase_service, whatsapp_parser
-from services.whatsapp_sender import send_whatsapp
+from services.whatsapp_sender import send_whatsapp, TWILIO_TOKEN
 from services.whatsapp_pipeline import run_pipeline_and_notify
 from services.web3_service import repay_loan_onchain
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -168,14 +173,30 @@ async def _handle_apply(
 
 
 @router.post("/webhook/whatsapp")
-async def whatsapp_webhook(payload: dict, background_tasks: BackgroundTasks):
-    messages = payload.get("messages", [])
-    if not messages:
-        return {"status": "no_messages"}
+async def whatsapp_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    From: str = Form(""),
+    Body: str = Form(""),
+):
+    # Twilio signature verification — skip in dev when token not configured
+    if TWILIO_TOKEN:
+        try:
+            from twilio.request_validator import RequestValidator
+            form_data = dict(await request.form())
+            signature = request.headers.get("X-Twilio-Signature", "")
+            # Use WEBHOOK_BASE_URL if set (needed behind Railway's proxy)
+            base_url = os.getenv("WEBHOOK_BASE_URL", str(request.url))
+            validator = RequestValidator(TWILIO_TOKEN)
+            if not validator.validate(base_url, form_data, signature):
+                logger.warning("[Webhook] Invalid Twilio signature from %s", request.client)
+                raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+        except ImportError:
+            pass  # twilio package not installed — skip verification
 
-    msg = messages[0]
-    phone = msg.get("from", "")
-    body = msg.get("text", {}).get("body", "").strip()
+    # Twilio sends From=whatsapp:+919876543210
+    phone = From.replace("whatsapp:", "").strip()
+    body = Body.strip()
 
     if not phone or not body:
         return {"status": "missing_fields"}
