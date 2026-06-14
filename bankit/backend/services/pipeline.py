@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from services import supabase_service
 from services.trust_score import score_loan_request
 from services.corridor_service import run_corridor_check
+from services.sweep_engine import execute_atomic_sweep
 from services.web3_service import release_micro_liquidity, build_trust_score_hash
 
 
@@ -122,6 +123,19 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             await supabase_service.update_loan(loan_id, {"status": "disbursed", "tx_hash": tx_hash})
             await supabase_service.create_transaction(loan_id, loan["amount_inr"], "disburse", tx_hash)
             print(f"[Pipeline] Loan {loan_id} disbursed — tx {tx_hash}")
+
+            # ── Atomic Sweep: real-time tax withholding on disbursement ─────
+            try:
+                await execute_atomic_sweep(
+                    merchant_id=merchant_id,
+                    merchant_wallet=wallet_address,
+                    gross_amount=float(loan["amount_inr"]),
+                    source="loan_disbursal",
+                    reference_id=loan_id,
+                )
+                print(f"[Pipeline] Loan {loan_id} — Atomic Sweep recorded")
+            except Exception as sweep_err:
+                print(f"[Pipeline] Loan {loan_id} — Atomic Sweep failed (non-blocking): {sweep_err}")
         else:
             print(f"[Pipeline] Loan {loan_id} approved but on-chain disbursement failed")
 
