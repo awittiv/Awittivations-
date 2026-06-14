@@ -75,6 +75,12 @@ async def create_transaction(loan_id: str, amount: float, tx_type: str, polygon_
     return result.data[0]
 
 
+async def update_merchant(merchant_id: str, updates: dict) -> dict:
+    client = get_client()
+    result = client.table("merchants").update(updates).eq("id", merchant_id).execute()
+    return result.data[0]
+
+
 async def get_repayment_history(merchant_id: str) -> list[dict]:
     client = get_client()
     loans = client.table("loans").select("id").eq("merchant_id", merchant_id).execute()

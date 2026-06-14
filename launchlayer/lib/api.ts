@@ -34,6 +34,19 @@ export const bankitApi = {
   merchants: {
     get: (id: string) => apiFetch<MerchantResponse>(`/merchants/${id}`),
   },
+  admin: {
+    loans: {
+      list: () => apiFetch<AdminLoan[]>("/admin/loans"),
+      approve: (id: string) => apiFetch<LoanResponse>(`/admin/loans/${id}/approve`, { method: "POST" }),
+      reject: (id: string) => apiFetch<LoanResponse>(`/admin/loans/${id}/reject`, { method: "POST" }),
+      disburse: (id: string) => apiFetch<LoanResponse>(`/admin/loans/${id}/disburse`, { method: "POST" }),
+    },
+    merchants: {
+      list: () => apiFetch<MerchantResponse[]>("/admin/merchants"),
+      updateKyc: (id: string, status: string) =>
+        apiFetch(`/admin/merchants/${id}/kyc`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    },
+  },
 };
 
 export interface LoanResponse {
@@ -60,4 +73,12 @@ export interface MerchantResponse {
   wallet_address: string | null;
   kyc_status: string;
   created_at: string;
+}
+
+export interface AdminLoan extends LoanResponse {
+  merchants: {
+    business_name: string;
+    phone: string | null;
+    wallet_address: string | null;
+  } | null;
 }
