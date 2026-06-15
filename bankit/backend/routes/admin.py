@@ -6,6 +6,7 @@ from services import supabase_service
 from services.web3_service import release_micro_liquidity, build_trust_score_hash
 from services.sweep_engine import execute_atomic_sweep
 from services.whatsapp_sender import send_whatsapp
+from services.wallet_service import generate_new_master_seed, derive_oracle_wallet
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -156,3 +157,37 @@ async def get_merchant_kyc_docs(merchant_id: str, _: str = Depends(get_admin_use
         {**doc, "signed_url": supabase_service.get_signed_kyc_url(doc["storage_path"])}
         for doc in docs
     ]
+
+
+# ── Sovereign Wallet Admin ───────────────────────────────────────────────────
+
+@router.get("/wallet/oracle")
+async def get_oracle_wallet(_: str = Depends(get_admin_user_id)):
+    """
+    Return the oracle wallet address derived from WALLET_MASTER_SEED (index 0).
+    Use this to fund the oracle with MATIC for gas.
+    """
+    try:
+        address, _ = derive_oracle_wallet()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return {
+        "oracle_address": address,
+        "derivation_path": "m/44'/60'/0'/0/0",
+        "note": "Fund this address with MATIC on Polygon Amoy for contract deployment and gas.",
+    }
+
+
+@router.post("/wallet/generate-seed")
+async def generate_master_seed(_: str = Depends(get_admin_user_id)):
+    """
+    Generate a fresh 24-word BIP-39 master seed.
+    ONLY call this during initial setup. Save the mnemonic immediately —
+    it controls all sovereign merchant wallets. Set it as WALLET_MASTER_SEED.
+    """
+    mnemonic = generate_new_master_seed()
+    return {
+        "mnemonic": mnemonic,
+        "warning": "BACK THIS UP NOW. Store in a secrets manager. Losing it loses all sovereign wallets.",
+        "next_step": "Set WALLET_MASTER_SEED=<mnemonic> in your environment, then restart the server.",
+    }

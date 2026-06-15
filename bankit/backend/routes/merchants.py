@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Literal
 from models.loan import MerchantResponse
 from services import supabase_service
+from services.wallet_service import assign_sovereign_wallet, get_merchant_address
 from services.web3_service import get_passport_token_id, PASSPORT_ADDRESS, _ZERO_ADDRESS
 from auth import get_current_merchant_id
 
@@ -54,6 +55,74 @@ async def submit_kyc_doc(
         await supabase_service.update_merchant(merchant_id, {"kyc_status": "under_review"})
 
     return {"status": "submitted", "doc_type": body.doc_type}
+
+
+@router.post("/merchants/{merchant_id}/wallet/init")
+async def init_sovereign_wallet(
+    merchant_id: str,
+    current_merchant_id: str = Depends(get_current_merchant_id),
+):
+    """
+    Assign a BIP-44 sovereign wallet to the merchant (idempotent).
+    Called once after signup — gives the merchant a Polygon address
+    without requiring MetaMask or any external wallet setup.
+    """
+    if merchant_id != current_merchant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = await assign_sovereign_wallet(merchant_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return result
+
+
+@router.get("/merchants/{merchant_id}/wallet")
+async def get_wallet(
+    merchant_id: str,
+    current_merchant_id: str = Depends(get_current_merchant_id),
+):
+    """Return the merchant's sovereign wallet address and on-chain balance."""
+    if merchant_id != current_merchant_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    merchant = await supabase_service.get_merchant_by_id(merchant_id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+
+    wallet_address = merchant.get("wallet_address")
+    wallet_index   = merchant.get("wallet_index")
+
+    if not wallet_address:
+        return {
+            "has_wallet": False,
+            "message": "No wallet yet. POST /merchants/{id}/wallet/init to create one.",
+        }
+
+    # Fetch on-chain BKD balance
+    bkd_balance = None
+    try:
+        from services.web3_service import get_web3, ROUTER_ABI, PASSPORT_ADDRESS as _PA
+        import os
+        stablecoin_addr = os.getenv("STABLECOIN_ADDRESS", "")
+        if stablecoin_addr and stablecoin_addr != "0x0000000000000000000000000000000000000000":
+            ERC20_BALANCE_ABI = [{"inputs":[{"name":"account","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]
+            w3 = get_web3()
+            token = w3.eth.contract(address=stablecoin_addr, abi=ERC20_BALANCE_ABI)
+            raw = token.functions.balanceOf(wallet_address).call()
+            bkd_balance = raw / (10 ** 6)
+    except Exception:
+        pass
+
+    return {
+        "has_wallet": True,
+        "wallet_address": wallet_address,
+        "sovereign": wallet_index is not None,
+        "wallet_index": wallet_index,
+        "bkd_balance": bkd_balance,
+        "chain": "Polygon Amoy",
+        "polygonscan_url": f"https://amoy.polygonscan.com/address/{wallet_address}",
+    }
 
 
 @router.get("/merchants/{merchant_id}/passport")
