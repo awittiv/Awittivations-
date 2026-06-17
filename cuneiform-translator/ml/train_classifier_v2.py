@@ -120,17 +120,22 @@ def main():
     parser.add_argument("--val-frac", type=float, default=0.15)
     args = parser.parse_args()
 
-    # Build class_to_idx from existing label_map (preserve class indices)
     label_map = json.loads(LABEL_MAP_PATH.read_text())
     train_label_to_class: dict[str, int] = label_map["train_label_to_class"]
-    n_classes = label_map["n_classes"]
+
+    gt_folders = sorted(
+        [d.name for d in GT_CROPS_DIR.iterdir() if d.is_dir()],
+        key=lambda x: int(x)
+    )
+    folder_to_idx = {name: i for i, name in enumerate(gt_folders)}
+    n_classes = len(gt_folders)
     print(f"Classes: {n_classes}")
 
     train_tf = get_transforms(train=True)
     val_tf   = get_transforms(train=False)
 
     # Load GT crops with train transform
-    gt_ds = CropDataset(GT_CROPS_DIR, train_label_to_class, train_tf)
+    gt_ds = CropDataset(GT_CROPS_DIR, folder_to_idx, train_tf)
     print(f"GT crops: {len(gt_ds)}")
 
     datasets_to_merge = [gt_ds]
@@ -197,9 +202,18 @@ def main():
             torch.save(model.state_dict(), MODEL_PATH)
             print(f"           ↑ saved (val_acc={val_acc:.4f})")
 
+    import shutil
+    # Keep v2 weights separately so v3 can ensemble with them
+    v2_path = ML_DIR / "model_v2.pt"
+    shutil.copy(MODEL_PATH, v2_path)
+    print(f"Ensemble copy → {v2_path}")
+
     info = {
+        "backbone": "efficientnet_b0",
         "n_classes": n_classes,
+        "class_to_idx": folder_to_idx,
         "best_val_acc": best_val_acc,
+        "crop_size": CROP_SIZE,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "n_train": n_train,

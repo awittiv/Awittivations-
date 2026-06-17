@@ -20,10 +20,11 @@ from torchvision import models, transforms
 ML_DIR = Path(__file__).parent
 
 # Classifier paths
-MODEL_PATH = ML_DIR / "model.pt"
-INFO_PATH  = ML_DIR / "model_info.json"
-LABEL_MAP  = ML_DIR / "label_map.json"
-TL_TO_MZL  = ML_DIR / "train_to_mzl.json"
+MODEL_PATH        = ML_DIR / "model.pt"
+MODEL_V2_PATH     = ML_DIR / "model_v2.pt"   # v2 weights kept for ensemble
+INFO_PATH         = ML_DIR / "model_info.json"
+LABEL_MAP         = ML_DIR / "label_map.json"
+TL_TO_MZL         = ML_DIR / "train_to_mzl.json"
 
 # Detector paths
 DETECTOR_PATH      = ML_DIR / "detector.pt"
@@ -78,6 +79,7 @@ class CuneiformRecognizer:
         self._detector = None
         self._detector_loaded = False
         self._detector_type = "faster_rcnn"  # or "yolo"
+        self._ensemble_model = None  # secondary model for ensembling
 
     # ── Classifier ───────────────────────────────────────────────────────────
 
@@ -169,26 +171,46 @@ class CuneiformRecognizer:
             self._netidx_to_mzl[netidx] = mzl
             self._netidx_to_sign[netidx] = _get_sign_name(mzl)
 
+        # Load ensemble model (v2 B0 weights) if v3 B2 is primary
+        if MODEL_V2_PATH.exists() and backbone == "efficientnet_b2":
+            try:
+                ens = models.efficientnet_b0(weights=None)
+                ens_in = ens.classifier[1].in_features
+                ens.classifier = nn.Sequential(
+                    nn.Dropout(p=0.3, inplace=True),
+                    nn.Linear(ens_in, n_classes),
+                )
+                ens.load_state_dict(torch.load(MODEL_V2_PATH, map_location="cpu", weights_only=True))
+                ens.eval()
+                self._ensemble_model = ens
+                print("[recognize] Ensemble model (B0 v2) loaded")
+            except Exception as e:
+                print(f"[recognize] Ensemble load failed: {e}")
+
     def classify_patch(self, patch: Image.Image) -> tuple[int, float]:
         self._load_classifier()
         rgb = patch.convert("RGB")
         tta_tfs = getattr(self, "_tta_transforms", None)
-        if tta_tfs:
-            # Average softmax over all TTA views
-            with torch.no_grad():
+
+        with torch.no_grad():
+            if tta_tfs:
                 avg_probs = None
                 for tf in tta_tfs:
                     x = tf(rgb).unsqueeze(0)
                     p = torch.softmax(self._classifier(x), dim=1)
                     avg_probs = p if avg_probs is None else avg_probs + p
                 avg_probs = avg_probs / len(tta_tfs)
-            conf, cls = avg_probs.max(dim=1)
-        else:
-            x = self._classifier_transform(rgb).unsqueeze(0)
-            with torch.no_grad():
-                logits = self._classifier(x)
-                probs = torch.softmax(logits, dim=1)
-                conf, cls = probs.max(dim=1)
+            else:
+                x = self._classifier_transform(rgb).unsqueeze(0)
+                avg_probs = torch.softmax(self._classifier(x), dim=1)
+
+            # Ensemble: average with secondary model if loaded
+            if self._ensemble_model is not None:
+                x_ens = self._classifier_transform(rgb).unsqueeze(0)
+                ens_probs = torch.softmax(self._ensemble_model(x_ens), dim=1)
+                avg_probs = 0.6 * avg_probs + 0.4 * ens_probs  # weight B2 higher
+
+        conf, cls = avg_probs.max(dim=1)
         return cls.item(), conf.item()
 
     # ── Detector ─────────────────────────────────────────────────────────────
