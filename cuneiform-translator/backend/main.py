@@ -276,6 +276,8 @@ def _clean_artifact(a: dict) -> dict:
     colls  = [c.get("collection", {}).get("collection", "") for c in a.get("collections", []) if c.get("collection")]
     art_id = a.get("id", 0)
     p_number = f"P{art_id:06d}"
+    inscription = a.get("inscription") or {}
+    atf = inscription.get("atf", "") if isinstance(inscription, dict) else ""
     return {
         "p_number":    p_number,
         "designation": a.get("designation", ""),
@@ -285,6 +287,7 @@ def _clean_artifact(a: dict) -> dict:
         "languages":   [l for l in langs if l],
         "collections": [c for c in colls if c],
         "photo_url":   _photo_url(art_id),
+        "atf":         atf,
     }
 
 
@@ -367,6 +370,7 @@ async def cdli_filters():
 
 class CDLITranslateRequest(BaseModel):
     p_number: str
+    atf_text: str | None = None
 
 
 @app.post("/api/cdli/translate", response_model=ImageTranslateResponse)
@@ -375,6 +379,36 @@ async def cdli_translate(req: CDLITranslateRequest):
     if not p.startswith("P") or not p[1:].isdigit():
         raise HTTPException(status_code=400, detail="Invalid P-number format (e.g. P106294)")
 
+    # ATF text path: faster, more accurate, uses Haiku
+    if req.atf_text and len(req.atf_text.strip()) > 10:
+        try:
+            message = get_client().messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1024,
+                system=SYSTEM_PROMPT,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Translate this cuneiform text from CDLI ({p}). "
+                        f"It is in ATF (Assyriological Text Format) — lines starting with &, #atf, or @ are "
+                        f"structural markers; numbered lines are the inscription itself:\n\n{req.atf_text}"
+                    )
+                }],
+            )
+            raw = message.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            result = json.loads(raw.strip())
+            result["transliteration"] = req.atf_text
+            return ImageTranslateResponse(**result)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=500, detail="Model returned malformed response")
+        except anthropic.APIError as e:
+            raise HTTPException(status_code=502, detail=f"API error: {str(e)}")
+
+    # Photo fallback: download tablet image, use Sonnet vision
     photo_url = f"https://cdli.earth/dl/photo/{p}.jpg"
     try:
         data = _cdli_get(photo_url)

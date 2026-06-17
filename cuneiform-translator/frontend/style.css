@@ -378,6 +378,34 @@ button#translate-btn:disabled { background: #b0a090; cursor: not-allowed; }
   font-style: italic;
 }
 
+.cdli-atf-badge {
+  display: inline-block;
+  background: #4a5520;
+  color: #e8f0c8;
+  font-size: 0.6rem;
+  font-family: sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.cdli-atf-snippet {
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: #4a5520;
+  background: #f0f4e4;
+  border-left: 2px solid #8a9a50;
+  padding: 0.25rem 0.5rem;
+  margin-top: 0.3rem;
+  border-radius: 0 3px 3px 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cdli-translate-btn {
   flex-shrink: 0;
   padding: 0.4rem 0.85rem;

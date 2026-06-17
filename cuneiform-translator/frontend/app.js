@@ -1,6 +1,7 @@
 const API = "";
 let activeTab = "text";
 let selectedFile = null;
+const cdliAtfCache = {};
 
 // ── Tab switching ────────────────────────────────────────────────────────────
 
@@ -240,31 +241,51 @@ async function cdliLookup() {
   }
 }
 
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function atfSnippet(atf) {
+  return atf.split("\n")
+    .filter(l => /^\d+['.]/.test(l.trim()))
+    .slice(0, 3)
+    .map(l => escapeHtml(l.trim()))
+    .join("\n");
+}
+
 function renderCDLIResults(results) {
   const container = document.getElementById("cdli-results");
   if (!results.length) {
-    container.innerHTML = '<p class="cdli-empty">No tablets found. Try different keywords.</p>';
+    container.innerHTML = '<p class="cdli-empty">No tablets found. Try different filters.</p>';
     return;
   }
 
-  container.innerHTML = results.map(r => `
+  results.forEach(r => { if (r.atf) cdliAtfCache[r.p_number] = r.atf; });
+
+  container.innerHTML = results.map(r => {
+    const snippet = r.atf ? atfSnippet(r.atf) : "";
+    return `
     <div class="cdli-card">
       <div class="cdli-thumb-wrap">
-        <img class="cdli-thumb" src="${r.photo_url}" alt="${r.designation}"
+        <img class="cdli-thumb" src="${r.photo_url}" alt="${escapeHtml(r.designation)}"
              onerror="this.parentElement.classList.add('no-photo')" loading="lazy" />
       </div>
       <div class="cdli-info">
-        <div class="cdli-pnum">${r.p_number}</div>
-        <div class="cdli-designation">${r.designation || "—"}</div>
-        ${r.period ? `<div class="cdli-meta">${r.period}</div>` : ""}
-        ${r.genres.length ? `<div class="cdli-meta">${r.genres.join(" · ")}</div>` : ""}
-        ${r.museum_no ? `<div class="cdli-museum">${r.museum_no}</div>` : ""}
+        <div class="cdli-pnum">
+          ${r.p_number}
+          ${r.atf ? '<span class="cdli-atf-badge">ATF</span>' : ""}
+        </div>
+        <div class="cdli-designation">${escapeHtml(r.designation || "—")}</div>
+        ${r.period ? `<div class="cdli-meta">${escapeHtml(r.period)}</div>` : ""}
+        ${r.genres.length ? `<div class="cdli-meta">${r.genres.map(escapeHtml).join(" · ")}</div>` : ""}
+        ${r.museum_no ? `<div class="cdli-museum">${escapeHtml(r.museum_no)}</div>` : ""}
+        ${snippet ? `<pre class="cdli-atf-snippet">${snippet}</pre>` : ""}
       </div>
       <button class="cdli-translate-btn" onclick="cdliTranslate('${r.p_number}', this)">
         Translate
       </button>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 }
 
 async function cdliTranslate(pNumber, btn) {
@@ -272,11 +293,13 @@ async function cdliTranslate(pNumber, btn) {
   btn.textContent = "Translating…";
   hideResult();
 
+  const atfText = cdliAtfCache[pNumber] || null;
+
   try {
     const res = await fetch(`${API}/api/cdli/translate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ p_number: pNumber }),
+      body: JSON.stringify({ p_number: pNumber, atf_text: atfText }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Translation failed");
     renderResult(await res.json(), true);
