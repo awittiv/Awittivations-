@@ -468,10 +468,16 @@ async def ml_status():
     if not os.path.exists(model_path):
         return {"available": False, "reason": "Model not yet trained — run ml/train.py"}
     info = json.loads(open(info_path).read()) if os.path.exists(info_path) else {}
+    detector_path = os.path.join(ML_DIR, "detector.pt")
+    detector_info_path = os.path.join(ML_DIR, "detector_info.json")
+    detector_info = json.loads(open(detector_info_path).read()) if os.path.exists(detector_info_path) else {}
     return {
         "available": True,
         "n_classes": info.get("n_classes"),
         "best_val_acc": info.get("best_val_acc"),
+        "detector_available": os.path.exists(detector_path),
+        "detector_recall": detector_info.get("val_recall"),
+        "detector_precision": detector_info.get("val_precision"),
     }
 
 

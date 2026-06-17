@@ -5,3 +5,4 @@ __pycache__/
 ml/data/tablets/
 ml/data/crops/
 ml/model.pt
+ml/detector.pt

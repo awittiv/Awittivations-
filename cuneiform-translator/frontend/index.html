@@ -21,7 +21,7 @@
           <button class="tab active" id="tab-text" onclick="switchTab('text')">Transliterated Text</button>
           <button class="tab" id="tab-image" onclick="switchTab('image')">Tablet Photo</button>
           <button class="tab" id="tab-cdli" onclick="switchTab('cdli')">Browse CDLI</button>
-          <button class="tab" id="tab-ml" onclick="switchTab('ml')">Sign Classifier</button>
+          <button class="tab" id="tab-ml" onclick="switchTab('ml')">Sign Detector</button>
         </div>
 
         <!-- Text input panel -->
@@ -81,7 +81,7 @@
               <div class="drop-icon">🔬</div>
               <p>Upload a tablet photo for specialist sign recognition</p>
               <p class="drop-sub">or <button class="link-btn" onclick="document.getElementById('ml-image-input').click()">browse files</button></p>
-              <p class="drop-sub">Trained on Neo-Assyrian tablets · 129 sign classes</p>
+              <p class="drop-sub">Faster R-CNN detector + EfficientNet classifier · Neo-Assyrian tablets</p>
             </div>
             <div id="ml-image-preview-wrap" hidden>
               <img id="ml-image-preview" alt="Tablet preview" />
@@ -89,7 +89,7 @@
             </div>
           </div>
           <button id="ml-translate-btn" onclick="mlRecognize()" style="margin-top:0.75rem;width:100%;padding:0.8rem;background:var(--clay-dark);color:white;border:none;border-radius:var(--radius);font-size:1rem;font-family:inherit;cursor:pointer;">
-            Run Sign Classifier + Translate
+            Run Sign Detector + Translate
           </button>
         </div>
 

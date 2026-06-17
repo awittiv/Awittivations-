@@ -328,8 +328,11 @@ async function loadMlStatus() {
     const btn  = document.getElementById("ml-translate-btn");
     if (s.available) {
       icon.textContent = "✓";
-      const acc = s.best_val_acc ? ` · val acc ${(s.best_val_acc * 100).toFixed(1)}%` : "";
-      text.textContent = `Model ready · ${s.n_classes} sign classes${acc}`;
+      const acc = s.best_val_acc ? ` · clf ${(s.best_val_acc * 100).toFixed(1)}%` : "";
+      const det = s.detector_available
+        ? ` · detector recall ${((s.detector_recall || 0) * 100).toFixed(0)}%`
+        : " · no detector";
+      text.textContent = `Model ready · ${s.n_classes} sign classes${acc}${det}`;
       document.getElementById("ml-status-bar").classList.add("ml-ready");
       btn.disabled = false;
     } else {
@@ -377,7 +380,7 @@ async function mlRecognize() {
     showError(e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Run Sign Classifier + Translate";
+    btn.textContent = "Run Sign Detector + Translate";
   }
 }
 
