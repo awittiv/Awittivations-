@@ -27,6 +27,7 @@ TL_TO_MZL  = ML_DIR / "train_to_mzl.json"
 
 # Detector paths
 DETECTOR_PATH      = ML_DIR / "detector.pt"
+YOLO_DETECTOR_PATH = ML_DIR / "detector_yolo.pt"
 DETECTOR_INFO_PATH = ML_DIR / "detector_info.json"
 
 DETECTOR_MAX_SIZE = 800  # must match train_detector.py
@@ -76,6 +77,7 @@ class CuneiformRecognizer:
         self._netidx_to_mzl: dict[int, int] = {}
         self._detector = None
         self._detector_loaded = False
+        self._detector_type = "faster_rcnn"  # or "yolo"
 
     # ── Classifier ───────────────────────────────────────────────────────────
 
@@ -146,10 +148,21 @@ class CuneiformRecognizer:
     # ── Detector ─────────────────────────────────────────────────────────────
 
     def _load_detector(self) -> bool:
-        """Load Faster R-CNN detector. Returns True if available."""
+        """Load detector (YOLO preferred, falls back to Faster R-CNN). Returns True if available."""
         if self._detector_loaded:
             return self._detector is not None
         self._detector_loaded = True
+
+        # Prefer YOLO if weights exist
+        if YOLO_DETECTOR_PATH.exists():
+            try:
+                from ultralytics import YOLO
+                self._detector = YOLO(str(YOLO_DETECTOR_PATH))
+                self._detector_type = "yolo"
+                print("[recognize] YOLO detector loaded")
+                return True
+            except Exception as e:
+                print(f"[recognize] YOLO load failed: {e}")
 
         if not DETECTOR_PATH.exists():
             return False
@@ -171,6 +184,7 @@ class CuneiformRecognizer:
             )
             model.eval()
             self._detector = model
+            self._detector_type = "faster_rcnn"
             return True
         except Exception as e:
             print(f"[recognize] Detector load failed: {e}")
@@ -178,13 +192,71 @@ class CuneiformRecognizer:
 
     def _detect_signs(self, img: Image.Image, score_thresh: float = 0.2) -> list[tuple[int, int, int, int]]:
         """
-        Run Faster R-CNN detector. Returns list of (x1, y1, x2, y2) in original image coords.
-        Automatically picks whole-image or tiled inference based on detector_info.json.
+        Run detector. Returns list of (x1, y1, x2, y2) in original image coords.
+        Uses YOLO when detector_yolo.pt is present, otherwise Faster R-CNN.
         """
+        if self._detector_type == "yolo":
+            return self._detect_signs_yolo(img, score_thresh)
+        return self._detect_signs_frcnn(img, score_thresh)
+
+    def _detect_signs_yolo(self, img: Image.Image, score_thresh: float = 0.25) -> list[tuple[int, int, int, int]]:
+        """Tiled YOLO inference."""
+        import numpy as np
+        from torchvision.ops import nms as tv_nms
+
+        dinfo = {}
+        if DETECTOR_INFO_PATH.exists():
+            dinfo = json.loads(DETECTOR_INFO_PATH.read_text())
+        tile_size = dinfo.get("tile_size", 512)
+        tile_stride = dinfo.get("tile_stride", 256)
+        resize_max = dinfo.get("resize_max", 1200)
+        conf = dinfo.get("eval_score_thresh", score_thresh)
+        nms_iou = dinfo.get("eval_nms_iou", 0.3)
+
+        w, h = img.size
+        scale = min(resize_max / max(w, h), 1.0)
+        img_rs = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS) if scale < 1.0 else img
+        rw, rh = img_rs.size
+
+        ys = sorted(set(list(range(0, max(1, rh - tile_size), tile_stride)) + [max(0, rh - tile_size)]))
+        xs = sorted(set(list(range(0, max(1, rw - tile_size), tile_stride)) + [max(0, rw - tile_size)]))
+
+        all_boxes: list[list[float]] = []
+        all_scores: list[float] = []
+
+        for y0 in ys:
+            y1e = min(y0 + tile_size, rh)
+            for x0 in xs:
+                x1e = min(x0 + tile_size, rw)
+                patch = img_rs.crop((x0, y0, x1e, y1e)).convert("RGB")
+                results = self._detector.predict(
+                    np.array(patch), conf=conf, iou=nms_iou, verbose=False
+                )
+                for r in results:
+                    for box in r.boxes:
+                        bx1, by1, bx2, by2 = box.xyxy[0].tolist()
+                        all_boxes.append([bx1 + x0, by1 + y0, bx2 + x0, by2 + y0])
+                        all_scores.append(float(box.conf[0]))
+
+        if not all_boxes:
+            return []
+
+        import torch
+        boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
+        scores_t = torch.tensor(all_scores)
+        keep = tv_nms(boxes_t, scores_t, iou_threshold=nms_iou)
+        boxes_t = boxes_t[keep]
+
+        return [
+            (int(b[0] / scale), int(b[1] / scale), int(b[2] / scale), int(b[3] / scale))
+            for b in boxes_t.tolist()
+        ]
+
+    def _detect_signs_frcnn(self, img: Image.Image, score_thresh: float = 0.2) -> list[tuple[int, int, int, int]]:
+        """Tiled Faster R-CNN inference."""
         import torchvision.transforms.functional as TF
         from torchvision.ops import nms
 
-        # Determine if model was trained on tiles
         tile_size = None
         tile_stride = None
         resize_max = DETECTOR_MAX_SIZE
@@ -197,24 +269,19 @@ class CuneiformRecognizer:
 
         w, h = img.size
         scale = min(resize_max / max(w, h), 1.0)
-        if scale < 1.0:
-            img_rs = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-        else:
-            img_rs = img
-            scale = 1.0
+        img_rs = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS) if scale < 1.0 else img
         rw, rh = img_rs.size
 
         all_boxes: list[list[float]] = []
         all_scores: list[float] = []
 
         if tile_size:
-            # Tiled inference — must match training domain
             stride = tile_stride or tile_size // 2
-            ys = list(range(0, max(1, rh - tile_size), stride)) + [max(0, rh - tile_size)]
-            xs = list(range(0, max(1, rw - tile_size), stride)) + [max(0, rw - tile_size)]
-            for y0 in sorted(set(ys)):
+            ys = sorted(set(list(range(0, max(1, rh - tile_size), stride)) + [max(0, rh - tile_size)]))
+            xs = sorted(set(list(range(0, max(1, rw - tile_size), stride)) + [max(0, rw - tile_size)]))
+            for y0 in ys:
                 y1e = min(y0 + tile_size, rh)
-                for x0 in sorted(set(xs)):
+                for x0 in xs:
                     x1e = min(x0 + tile_size, rw)
                     patch = img_rs.crop((x0, y0, x1e, y1e))
                     img_t = TF.to_tensor(patch.convert("RGB"))
@@ -232,7 +299,6 @@ class CuneiformRecognizer:
             keep = nms(boxes_t, scores_t, iou_threshold=0.3)
             boxes_t = boxes_t[keep]
         else:
-            # Whole-image inference
             img_t = TF.to_tensor(img_rs.convert("RGB"))
             with torch.no_grad():
                 out = self._detector([img_t])[0]
@@ -244,7 +310,6 @@ class CuneiformRecognizer:
                 return []
             boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
 
-        # Scale back to original image coordinates
         return [
             (int(b[0] / scale), int(b[1] / scale), int(b[2] / scale), int(b[3] / scale))
             for b in boxes_t.tolist()
