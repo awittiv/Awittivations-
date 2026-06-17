@@ -10,11 +10,14 @@ function switchTab(tab) {
   document.getElementById("panel-text").hidden  = tab !== "text";
   document.getElementById("panel-image").hidden = tab !== "image";
   document.getElementById("panel-cdli").hidden  = tab !== "cdli";
+  document.getElementById("panel-ml").hidden    = tab !== "ml";
   document.getElementById("tab-text").classList.toggle("active",  tab === "text");
   document.getElementById("tab-image").classList.toggle("active", tab === "image");
   document.getElementById("tab-cdli").classList.toggle("active",  tab === "cdli");
-  document.getElementById("translate-btn").hidden = tab === "cdli";
+  document.getElementById("tab-ml").classList.toggle("active",    tab === "ml");
+  document.getElementById("translate-btn").hidden = tab === "cdli" || tab === "ml";
   hideResult();
+  if (tab === "ml") loadMlStatus();
 }
 
 // ── Image drop zone ──────────────────────────────────────────────────────────
@@ -312,6 +315,72 @@ async function cdliTranslate(pNumber, btn) {
   }
 }
 
+// ── ML Sign Classifier ───────────────────────────────────────────────────────
+
+let mlSelectedFile = null;
+
+async function loadMlStatus() {
+  try {
+    const res = await fetch(`${API}/api/ml/status`);
+    const s = await res.json();
+    const icon = document.getElementById("ml-status-icon");
+    const text = document.getElementById("ml-status-text");
+    const btn  = document.getElementById("ml-translate-btn");
+    if (s.available) {
+      icon.textContent = "✓";
+      const acc = s.best_val_acc ? ` · val acc ${(s.best_val_acc * 100).toFixed(1)}%` : "";
+      text.textContent = `Model ready · ${s.n_classes} sign classes${acc}`;
+      document.getElementById("ml-status-bar").classList.add("ml-ready");
+      btn.disabled = false;
+    } else {
+      icon.textContent = "⚙";
+      text.textContent = `Model training… ${s.reason}`;
+      btn.disabled = true;
+    }
+  } catch (_) {}
+}
+
+function setMlImage(file) {
+  mlSelectedFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById("ml-image-preview").src = e.target.result;
+    document.getElementById("ml-drop-zone-inner").hidden = true;
+    document.getElementById("ml-image-preview-wrap").hidden = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearMlImage() {
+  mlSelectedFile = null;
+  document.getElementById("ml-image-input").value = "";
+  document.getElementById("ml-image-preview").src = "";
+  document.getElementById("ml-drop-zone-inner").hidden = false;
+  document.getElementById("ml-image-preview-wrap").hidden = true;
+  hideResult();
+}
+
+async function mlRecognize() {
+  if (!mlSelectedFile) { showError("Please upload a tablet photo first."); return; }
+  const btn = document.getElementById("ml-translate-btn");
+  btn.disabled = true;
+  btn.textContent = "Running classifier…";
+  hideResult();
+
+  try {
+    const form = new FormData();
+    form.append("file", mlSelectedFile);
+    const res = await fetch(`${API}/api/ml/recognize`, { method: "POST", body: form });
+    if (!res.ok) throw new Error((await res.json()).detail || "Recognition failed");
+    renderResult(await res.json(), true);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run Sign Classifier + Translate";
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -324,4 +393,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") cdliLookup();
   });
   loadCDLIFilters();
+
+  // ML tab drop zone
+  const mlZone  = document.getElementById("ml-drop-zone");
+  const mlInput = document.getElementById("ml-image-input");
+  mlZone.addEventListener("dragover", e => { e.preventDefault(); mlZone.classList.add("drag-over"); });
+  mlZone.addEventListener("dragleave", () => mlZone.classList.remove("drag-over"));
+  mlZone.addEventListener("drop", e => {
+    e.preventDefault(); mlZone.classList.remove("drag-over");
+    if (e.dataTransfer.files[0]) setMlImage(e.dataTransfer.files[0]);
+  });
+  mlInput.addEventListener("change", () => { if (mlInput.files[0]) setMlImage(mlInput.files[0]); });
 });

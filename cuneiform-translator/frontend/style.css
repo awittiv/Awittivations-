@@ -420,6 +420,33 @@ button#translate-btn:disabled { background: #b0a090; cursor: not-allowed; }
 .cdli-translate-btn:hover { background: #6b500f; }
 .cdli-translate-btn:disabled { background: #b0a090; cursor: not-allowed; }
 
+/* ML status bar */
+.ml-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  background: #faf3e0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  font-family: sans-serif;
+}
+.ml-status-bar.ml-ready {
+  background: #f0f7ee;
+  border-color: #8aaa70;
+  color: #2d5a1b;
+}
+#ml-image-preview {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: #1a1209;
+}
+
 /* Drop zone */
 .drop-zone {
   border: 2px dashed var(--border);

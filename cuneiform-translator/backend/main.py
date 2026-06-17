@@ -1,5 +1,6 @@
 import os
 import io
+import sys
 import json
 import base64
 import urllib.request
@@ -15,6 +16,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import anthropic
+
+# ML sign recognizer (optional — only active if model has been trained)
+ML_DIR = os.path.join(os.path.dirname(__file__), "..", "ml")
+sys.path.insert(0, ML_DIR)
+try:
+    from recognize import get_recognizer
+    _ML_AVAILABLE = True
+except ImportError:
+    _ML_AVAILABLE = False
 
 app = FastAPI(title="Cuneiform Translator")
 
@@ -442,6 +452,86 @@ async def cdli_translate(req: CDLITranslateRequest):
                 raw = raw[4:]
         result = json.loads(raw.strip())
         return ImageTranslateResponse(**result)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Model returned malformed response")
+    except anthropic.APIError as e:
+        raise HTTPException(status_code=502, detail=f"API error: {str(e)}")
+
+
+@app.get("/api/ml/status")
+async def ml_status():
+    """Check whether the trained sign-recognition model is available."""
+    if not _ML_AVAILABLE:
+        return {"available": False, "reason": "ML module not installed"}
+    model_path = os.path.join(ML_DIR, "model.pt")
+    info_path  = os.path.join(ML_DIR, "model_info.json")
+    if not os.path.exists(model_path):
+        return {"available": False, "reason": "Model not yet trained — run ml/train.py"}
+    info = json.loads(open(info_path).read()) if os.path.exists(info_path) else {}
+    return {
+        "available": True,
+        "n_classes": info.get("n_classes"),
+        "best_val_acc": info.get("best_val_acc"),
+    }
+
+
+@app.post("/api/ml/recognize", response_model=ImageTranslateResponse)
+async def ml_recognize(file: UploadFile = File(...)):
+    """
+    Specialist path: run the trained cuneiform sign classifier on an uploaded
+    tablet photo to produce a transliteration, then pass it to Claude for translation.
+    """
+    if not _ML_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ML module not available")
+
+    model_path = os.path.join(ML_DIR, "model.pt")
+    if not os.path.exists(model_path):
+        raise HTTPException(status_code=503, detail="Model not yet trained — run ml/train.py first")
+
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 50 MB)")
+
+    data, _ = prepare_image(data, file.content_type)
+    img = Image.open(io.BytesIO(data))
+
+    try:
+        recognizer = get_recognizer()
+        result = recognizer.read_tablet(img)
+        transliteration = result["transliteration"]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sign recognition failed: {e}")
+
+    if not transliteration or transliteration == "(no signs detected)":
+        raise HTTPException(status_code=422, detail="No cuneiform signs detected in image")
+
+    # Pass ML-produced transliteration to Claude for scholarly translation
+    try:
+        message = get_client().messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Translate this cuneiform transliteration produced by an automated sign "
+                    "classifier. The readings may contain errors — please correct obvious "
+                    "mistakes using context and parallel texts where possible:\n\n"
+                    + transliteration
+                )
+            }],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        translation_result = json.loads(raw.strip())
+        translation_result["transliteration"] = transliteration
+        return ImageTranslateResponse(**translation_result)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Model returned malformed response")
     except anthropic.APIError as e:

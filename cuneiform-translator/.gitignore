@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.pyo
+ml/data/tablets/
+ml/data/crops/
+ml/model.pt
