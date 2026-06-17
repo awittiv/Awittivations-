@@ -229,7 +229,7 @@ class CuneiformRecognizer:
                 return []
             boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
             scores_t = torch.tensor(all_scores)
-            keep = nms(boxes_t, scores_t, iou_threshold=0.5)
+            keep = nms(boxes_t, scores_t, iou_threshold=0.3)
             boxes_t = boxes_t[keep]
         else:
             # Whole-image inference
