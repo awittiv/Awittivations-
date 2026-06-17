@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cuneiform Translator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cuneiform Translator</h1>
+      <p class="subtitle">Translate ancient Sumerian and Akkadian cuneiform from text or photograph</p>
+    </header>
+
+    <main>
+      <section class="input-section">
+
+        <!-- Tab switcher -->
+        <div class="tabs">
+          <button class="tab active" id="tab-text" onclick="switchTab('text')">Transliterated Text</button>
+          <button class="tab" id="tab-image" onclick="switchTab('image')">Tablet Photo</button>
+        </div>
+
+        <!-- Text input panel -->
+        <div id="panel-text">
+          <div class="examples-bar">
+            <span>Try an example:</span>
+            <div id="example-buttons"></div>
+          </div>
+          <textarea
+            id="input-text"
+            placeholder="e.g.  0.0.3 še gur&#10;mu-kux(DU)&#10;ku-li&#10;sipa udu-ka"
+            rows="8"
+            spellcheck="false"
+          ></textarea>
+        </div>
+
+        <!-- Image input panel -->
+        <div id="panel-image" hidden>
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="image-input" accept="image/jpeg,image/png,image/webp" hidden />
+            <div class="drop-zone-inner" id="drop-zone-inner">
+              <div class="drop-icon">&#128247;</div>
+              <p>Drag &amp; drop a tablet photo here</p>
+              <p class="drop-sub">or <button class="link-btn" onclick="document.getElementById('image-input').click()">browse files</button></p>
+              <p class="drop-sub">JPEG, PNG, WebP &mdash; auto-resized for best results</p>
+            </div>
+            <div id="image-preview-wrap" hidden>
+              <img id="image-preview" alt="Tablet preview" />
+              <button class="clear-btn" onclick="clearImage()">&#x2715; Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <button id="translate-btn" onclick="submitTranslation()">Translate</button>
+      </section>
+
+      <section class="result-section" id="result-section" hidden>
+        <div class="result-meta">
+          <span class="badge" id="badge-language"></span>
+          <span class="badge badge-secondary" id="badge-genre"></span>
+          <span class="badge badge-secondary" id="badge-period"></span>
+          <span class="confidence" id="confidence-indicator"></span>
+        </div>
+
+        <div class="transliteration-box" id="transliteration-box" hidden>
+          <h2>Transliteration (from image)</h2>
+          <pre id="transliteration-text"></pre>
+        </div>
+
+        <div class="translation-box">
+          <h2>Translation</h2>
+          <p id="translation-text"></p>
+        </div>
+
+        <div class="notes-box" id="notes-box" hidden>
+          <h3>Scholarly Notes</h3>
+          <ul id="notes-list"></ul>
+        </div>
+      </section>
+
+      <div class="error-box" id="error-box" hidden>
+        <p id="error-text"></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
