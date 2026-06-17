@@ -6,10 +6,13 @@ let selectedFile = null;
 
 function switchTab(tab) {
   activeTab = tab;
-  document.getElementById("panel-text").hidden = tab !== "text";
+  document.getElementById("panel-text").hidden  = tab !== "text";
   document.getElementById("panel-image").hidden = tab !== "image";
-  document.getElementById("tab-text").classList.toggle("active", tab === "text");
+  document.getElementById("panel-cdli").hidden  = tab !== "cdli";
+  document.getElementById("tab-text").classList.toggle("active",  tab === "text");
   document.getElementById("tab-image").classList.toggle("active", tab === "image");
+  document.getElementById("tab-cdli").classList.toggle("active",  tab === "cdli");
+  document.getElementById("translate-btn").hidden = tab === "cdli";
   hideResult();
 }
 
@@ -177,6 +180,80 @@ async function loadExamples() {
   } catch (_) {}
 }
 
+// ── CDLI Search ──────────────────────────────────────────────────────────────
+
+async function cdliSearch() {
+  const q = document.getElementById("cdli-query").value.trim();
+  if (!q) return;
+
+  const btn = document.getElementById("cdli-search-btn");
+  const container = document.getElementById("cdli-results");
+  btn.disabled = true;
+  btn.textContent = "Searching…";
+  container.innerHTML = '<p class="cdli-loading">Searching CDLI database…</p>';
+
+  try {
+    const res = await fetch(`${API}/api/cdli/search?q=${encodeURIComponent(q)}&limit=12`);
+    if (!res.ok) throw new Error((await res.json()).detail || "Search failed");
+    const results = await res.json();
+    renderCDLIResults(results);
+  } catch (e) {
+    container.innerHTML = `<p class="cdli-error">${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Search";
+  }
+}
+
+function renderCDLIResults(results) {
+  const container = document.getElementById("cdli-results");
+  if (!results.length) {
+    container.innerHTML = '<p class="cdli-empty">No tablets found. Try different keywords.</p>';
+    return;
+  }
+
+  container.innerHTML = results.map(r => `
+    <div class="cdli-card">
+      <div class="cdli-thumb-wrap">
+        <img class="cdli-thumb" src="${r.photo_url}" alt="${r.designation}"
+             onerror="this.parentElement.classList.add('no-photo')" loading="lazy" />
+      </div>
+      <div class="cdli-info">
+        <div class="cdli-pnum">${r.p_number}</div>
+        <div class="cdli-designation">${r.designation || "—"}</div>
+        ${r.period ? `<div class="cdli-meta">${r.period}</div>` : ""}
+        ${r.genres.length ? `<div class="cdli-meta">${r.genres.join(" · ")}</div>` : ""}
+        ${r.museum_no ? `<div class="cdli-museum">${r.museum_no}</div>` : ""}
+      </div>
+      <button class="cdli-translate-btn" onclick="cdliTranslate('${r.p_number}', this)">
+        Translate
+      </button>
+    </div>
+  `).join("");
+}
+
+async function cdliTranslate(pNumber, btn) {
+  btn.disabled = true;
+  btn.textContent = "Translating…";
+  hideResult();
+
+  try {
+    const res = await fetch(`${API}/api/cdli/translate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ p_number: pNumber }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || "Translation failed");
+    renderResult(await res.json(), true);
+    document.getElementById("result-section").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    showError(`${pNumber}: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Translate";
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -184,5 +261,8 @@ document.addEventListener("DOMContentLoaded", () => {
   initDropZone();
   document.getElementById("input-text").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitTranslation();
+  });
+  document.getElementById("cdli-query").addEventListener("keydown", e => {
+    if (e.key === "Enter") cdliSearch();
   });
 });

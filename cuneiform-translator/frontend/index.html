@@ -20,6 +20,7 @@
         <div class="tabs">
           <button class="tab active" id="tab-text" onclick="switchTab('text')">Transliterated Text</button>
           <button class="tab" id="tab-image" onclick="switchTab('image')">Tablet Photo</button>
+          <button class="tab" id="tab-cdli" onclick="switchTab('cdli')">Browse CDLI</button>
         </div>
 
         <!-- Text input panel -->
@@ -51,6 +52,15 @@
               <button class="clear-btn" onclick="clearImage()">&#x2715; Remove</button>
             </div>
           </div>
+        </div>
+
+        <!-- CDLI search panel -->
+        <div id="panel-cdli" hidden>
+          <div class="cdli-search-bar">
+            <input type="text" id="cdli-query" placeholder="Search tablets… e.g. grain receipt, Hammurabi, flood" spellcheck="false" />
+            <button id="cdli-search-btn" onclick="cdliSearch()">Search</button>
+          </div>
+          <div id="cdli-results" class="cdli-results"></div>
         </div>
 
         <button id="translate-btn" onclick="submitTranslation()">Translate</button>

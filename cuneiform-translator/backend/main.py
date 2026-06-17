@@ -2,12 +2,15 @@ import os
 import io
 import json
 import base64
+import urllib.request
+import urllib.error
+import urllib.parse
 from dotenv import load_dotenv
 from PIL import Image
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -240,6 +243,116 @@ async def examples():
             "text": "ul-tu u4-mi šu-a-tu\nu4-mi 6 u4-mi 7\na-bu-bu id-di-ma\nšá-ru-ú ra-aq-tu e-li māti il-lu-la"
         }
     ]
+
+
+CDLI_SEARCH = "https://cdli.earth/search?format=json"
+CDLI_PHOTO  = "https://cdli.earth/dl/photo/{p}.jpg"
+CDLI_HEADERS = {"User-Agent": "CuneiformTranslator/1.0 (research tool)"}
+
+
+def _cdli_get(url: str) -> bytes:
+    req = urllib.request.Request(url, headers=CDLI_HEADERS)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return r.read()
+
+
+def _photo_url(artifact_id: int) -> str:
+    return CDLI_PHOTO.format(p=f"P{artifact_id:06d}")
+
+
+def _has_photo(artifact_id: int) -> bool:
+    try:
+        req = urllib.request.Request(_photo_url(artifact_id), headers=CDLI_HEADERS, method="HEAD")
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _clean_artifact(a: dict) -> dict:
+    period = a.get("period") or {}
+    genres = [g.get("genre", {}).get("genre", "") for g in a.get("genres", []) if g.get("genre")]
+    langs  = [l.get("language", {}).get("language", "") for l in a.get("languages", []) if l.get("language")]
+    colls  = [c.get("collection", {}).get("collection", "") for c in a.get("collections", []) if c.get("collection")]
+    art_id = a.get("id", 0)
+    p_number = f"P{art_id:06d}"
+    return {
+        "p_number":    p_number,
+        "designation": a.get("designation", ""),
+        "museum_no":   a.get("museum_no", "") or "",
+        "period":      period.get("period", "") if period else "",
+        "genres":      [g for g in genres if g],
+        "languages":   [l for l in langs if l],
+        "collections": [c for c in colls if c],
+        "photo_url":   _photo_url(art_id),
+    }
+
+
+@app.get("/api/cdli/search")
+async def cdli_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(12, ge=1, le=50),
+):
+    try:
+        url = f"{CDLI_SEARCH}&q={urllib.parse.quote(q)}&limit={limit}"
+        raw = _cdli_get(url)
+        artifacts = json.loads(raw)
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="CDLI returned unexpected response")
+
+    results = [_clean_artifact(a) for a in artifacts]
+    return results
+
+
+class CDLITranslateRequest(BaseModel):
+    p_number: str
+
+
+@app.post("/api/cdli/translate", response_model=ImageTranslateResponse)
+async def cdli_translate(req: CDLITranslateRequest):
+    p = req.p_number.upper().strip()
+    if not p.startswith("P") or not p[1:].isdigit():
+        raise HTTPException(status_code=400, detail="Invalid P-number format (e.g. P106294)")
+
+    photo_url = f"https://cdli.earth/dl/photo/{p}.jpg"
+    try:
+        data = _cdli_get(photo_url)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise HTTPException(status_code=404, detail=f"No photo available for {p} in CDLI")
+        raise HTTPException(status_code=502, detail=f"CDLI photo fetch failed: {e}")
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+
+    data, media_type = prepare_image(data, "image/jpeg")
+    b64 = base64.standard_b64encode(data).decode("utf-8")
+
+    try:
+        message = get_client().messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1536,
+            system=IMAGE_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64}},
+                    {"type": "text", "text": f"Please examine this cuneiform tablet ({p} from the CDLI database) and provide a transliteration and translation of any visible text."}
+                ],
+            }],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        return ImageTranslateResponse(**result)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Model returned malformed response")
+    except anthropic.APIError as e:
+        raise HTTPException(status_code=502, detail=f"API error: {str(e)}")
 
 
 # Serve frontend
