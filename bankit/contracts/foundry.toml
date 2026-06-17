@@ -8,7 +8,9 @@ remappings = [
 ]
 
 [rpc_endpoints]
-amoy = "${POLYGON_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
+amoy    = "https://rpc-amoy.polygon.technology"
 
 [etherscan]
-amoy = { key = "${POLYGONSCAN_API_KEY}", url = "https://api-amoy.polygonscan.com/api" }
+polygon = { key = "${POLYGONSCAN_API_KEY}", url = "https://api.polygonscan.com/api" }
+amoy    = { key = "${POLYGONSCAN_API_KEY}", url = "https://api-amoy.polygonscan.com/api" }

@@ -6,18 +6,18 @@ import "../src/BankitStablecoin.sol";
 import "../src/BankitLiquidityRouter.sol";
 import "../src/BankitCreditPassport.sol";
 
-/// @notice Deploy BankitStablecoin + BankitLiquidityRouter + BankitCreditPassport to Polygon Amoy.
+/// @notice Deploy BankitStablecoin + BankitLiquidityRouter + BankitCreditPassport to Polygon Mainnet.
 ///
 /// Usage:
 ///   forge script script/Deploy.s.sol:Deploy \
-///     --rpc-url amoy \
+///     --rpc-url polygon \
 ///     --broadcast \
 ///     --verify \
 ///     -vvvv
 ///
 /// Required env vars:
 ///   ORACLE_PRIVATE_KEY  — deployer / oracle wallet private key
-///   POLYGONSCAN_API_KEY — for contract verification
+///   POLYGONSCAN_API_KEY — for contract verification (get free at polygonscan.com)
 contract Deploy is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("ORACLE_PRIVATE_KEY");

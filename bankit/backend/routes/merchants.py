@@ -120,8 +120,8 @@ async def get_wallet(
         "sovereign": wallet_index is not None,
         "wallet_index": wallet_index,
         "bkd_balance": bkd_balance,
-        "chain": "Polygon Amoy",
-        "polygonscan_url": f"https://amoy.polygonscan.com/address/{wallet_address}",
+        "chain": "Polygon",
+        "polygonscan_url": f"https://polygonscan.com/address/{wallet_address}",
     }
 
 
@@ -139,14 +139,14 @@ async def get_credit_passport(
             "has_passport": False,
             "message": "No Credit Passport yet — complete a loan to earn your on-chain credit identity.",
         }
-    polygonscan_base = "https://amoy.polygonscan.com/token"
+    polygonscan_base = "https://polygonscan.com/token"
     return {
         "has_passport": True,
         "token_id": token_id,
         "contract_address": PASSPORT_ADDRESS,
         "polygonscan_url": f"{polygonscan_base}/{PASSPORT_ADDRESS}?a={token_id}",
         "standard": "ERC-721 / ERC-5192 Soulbound",
-        "chain": "Polygon Amoy",
+        "chain": "Polygon",
     }
 
 

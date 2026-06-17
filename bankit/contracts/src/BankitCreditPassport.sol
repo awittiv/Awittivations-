@@ -195,7 +195,7 @@ contract BankitCreditPassport is ERC721, AccessControl, IERC5192 {
             '<text x="180" y="196" font-family="monospace" font-size="16" fill="#e2e8f0">BKD ', _formatUnits(p.totalRepaidUnits), '</text>',
             // Footer
             '<rect x="22" y="222" width="376" height="1" fill="#1e3a5f"/>',
-            '<text x="22" y="245" font-family="monospace" font-size="9" fill="#334155">POLYGON AMOY  |  bankit.app  |  NON-TRANSFERABLE</text>',
+            '<text x="22" y="245" font-family="monospace" font-size="9" fill="#334155">POLYGON MAINNET  |  bankit.app  |  NON-TRANSFERABLE</text>',
             '</svg>'
         ));
     }

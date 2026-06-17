@@ -174,7 +174,7 @@ async def get_oracle_wallet(_: str = Depends(get_admin_user_id)):
     return {
         "oracle_address": address,
         "derivation_path": "m/44'/60'/0'/0/0",
-        "note": "Fund this address with MATIC on Polygon Amoy for contract deployment and gas.",
+        "note": "Fund this address with MATIC on Polygon Mainnet for contract deployment and gas.",
     }
 
 

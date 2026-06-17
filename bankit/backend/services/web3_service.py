@@ -6,7 +6,7 @@ from web3 import Web3
 
 logger = logging.getLogger(__name__)
 
-RPC_URL = os.getenv("POLYGON_RPC_URL", "https://rpc-amoy.polygon.technology")
+RPC_URL = os.getenv("POLYGON_RPC_URL", "https://polygon-rpc.com")
 ORACLE_PUBLIC_KEY = os.getenv("ORACLE_PUBLIC_KEY", "0x0000000000000000000000000000000000000000")
 ORACLE_PRIVATE_KEY = os.getenv("ORACLE_PRIVATE_KEY", "0x" + "0" * 64)
 CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS", "0x0000000000000000000000000000000000000000")
@@ -64,10 +64,10 @@ async def _send_transaction(fn) -> str | None:
     try:
         nonce = web3.eth.get_transaction_count(ORACLE_PUBLIC_KEY)
         transaction = fn.build_transaction({
-            "chainId": 80002,
+            "chainId": 137,
             "gas": 200000,
-            "maxFeePerGas": web3.to_wei("2", "gwei"),
-            "maxPriorityFeePerGas": web3.to_wei("1", "gwei"),
+            "maxFeePerGas": web3.to_wei("50", "gwei"),
+            "maxPriorityFeePerGas": web3.to_wei("30", "gwei"),
             "nonce": nonce,
         })
         signed_txn = web3.eth.account.sign_transaction(transaction, private_key=ORACLE_PRIVATE_KEY)
