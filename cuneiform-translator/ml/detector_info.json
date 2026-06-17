@@ -4,9 +4,9 @@
   "tile_size": 512,
   "tile_stride": 256,
   "resize_max": 1200,
-  "best_train_loss": 0.7985,
-  "val_recall": 0.0633,
-  "val_precision": 0.1232,
+  "best_train_loss": 0.6783,
+  "val_recall": 0.0662,
+  "val_precision": 0.2371,
   "train_tablets": [
     "P335960",
     "P334894",
@@ -60,8 +60,8 @@
   "history": [
     {
       "epoch": 1,
-      "loss": 0.7985,
-      "seconds": 284.7
+      "loss": 1.2730,
+      "seconds": 262.0
     },
     {
       "epoch": 2,

@@ -38,8 +38,10 @@ CSV_FILES = [Path("/tmp/saa05.csv"), Path("/tmp/saa06.csv"), Path("/tmp/saa09.cs
 TILE_SIZE = 512          # patch size
 TILE_STRIDE = 256        # 50% overlap (512 * 0.5)
 RESIZE_MAX = 1200        # pre-scale tablets to this before tiling
-EPOCHS = 20
-LR = 2e-4                # lower LR — more training data, longer schedule
+EPOCHS = 30
+LR = 3e-5                # conservative LR — previous 2e-4 caused loss explosion
+WARMUP_EPOCHS = 3        # linear warmup before cosine decay
+GRAD_CLIP = 10.0         # gradient norm clip to prevent instability
 BATCH_SIZE = 2
 VAL_FRAC = 0.15          # holdout by tablet (not by tile)
 SEED = 42
@@ -191,7 +193,7 @@ def evaluate_tablet(model: torch.nn.Module, pnum: str, annotations: dict, score_
 
     boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
     scores_t = torch.tensor(all_scores)
-    keep = nms(boxes_t, scores_t, iou_threshold=0.5)
+    keep = nms(boxes_t, scores_t, iou_threshold=0.3)
     pred_boxes = boxes_t[keep]
 
     gt_raw = annotations.get(pnum, [])
@@ -239,7 +241,15 @@ def main():
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params, lr=LR, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0, total_iters=WARMUP_EPOCHS
+    )
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=EPOCHS - WARMUP_EPOCHS
+    )
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup, cosine], milestones=[WARMUP_EPOCHS]
+    )
 
     best_loss = float("inf")
     history = []
@@ -257,6 +267,7 @@ def main():
             loss = sum(loss_dict.values())
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(params, max_norm=GRAD_CLIP)
             optimizer.step()
             epoch_loss += loss.item()
         scheduler.step()
@@ -292,6 +303,7 @@ def main():
         "tile_size": TILE_SIZE,
         "tile_stride": TILE_STRIDE,
         "resize_max": RESIZE_MAX,
+        "eval_score_thresh": 0.3,
         "best_train_loss": round(best_loss, 4),
         "val_recall": round(val_recall, 4),
         "val_precision": round(val_precision, 4),
