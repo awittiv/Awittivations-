@@ -182,26 +182,61 @@ async function loadExamples() {
 
 // ── CDLI Search ──────────────────────────────────────────────────────────────
 
-async function cdliSearch() {
-  const q = document.getElementById("cdli-query").value.trim();
-  if (!q) return;
+async function loadCDLIFilters() {
+  try {
+    const res = await fetch(`${API}/api/cdli/filters`);
+    const { periods, genres } = await res.json();
+    const pSel = document.getElementById("cdli-period");
+    const gSel = document.getElementById("cdli-genre");
+    periods.forEach(p => { const o = document.createElement("option"); o.value = o.textContent = p; pSel.appendChild(o); });
+    genres.forEach(g => { const o = document.createElement("option"); o.value = o.textContent = g; gSel.appendChild(o); });
+  } catch (_) {}
+}
 
+async function cdliSearch() {
+  const period = document.getElementById("cdli-period").value;
+  const genre  = document.getElementById("cdli-genre").value;
   const btn = document.getElementById("cdli-search-btn");
   const container = document.getElementById("cdli-results");
+
   btn.disabled = true;
-  btn.textContent = "Searching…";
-  container.innerHTML = '<p class="cdli-loading">Searching CDLI database…</p>';
+  btn.textContent = "Browsing…";
+  container.innerHTML = '<p class="cdli-loading">Fetching tablets from CDLI…</p>';
 
   try {
-    const res = await fetch(`${API}/api/cdli/search?q=${encodeURIComponent(q)}&limit=12`);
-    if (!res.ok) throw new Error((await res.json()).detail || "Search failed");
-    const results = await res.json();
-    renderCDLIResults(results);
+    const params = new URLSearchParams({ limit: 12 });
+    if (period) params.set("period", period);
+    if (genre)  params.set("genre", genre);
+    const res = await fetch(`${API}/api/cdli/search?${params}`);
+    if (!res.ok) throw new Error((await res.json()).detail || "Browse failed");
+    renderCDLIResults(await res.json());
   } catch (e) {
     container.innerHTML = `<p class="cdli-error">${e.message}</p>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Search";
+    btn.textContent = "Browse";
+  }
+}
+
+async function cdliLookup() {
+  const p = document.getElementById("cdli-pnum-input").value.trim();
+  if (!p) return;
+  const btn = document.getElementById("cdli-pnum-btn");
+  const container = document.getElementById("cdli-results");
+
+  btn.disabled = true;
+  btn.textContent = "…";
+  container.innerHTML = '<p class="cdli-loading">Looking up tablet…</p>';
+
+  try {
+    const res = await fetch(`${API}/api/cdli/search?p_number=${encodeURIComponent(p)}`);
+    if (!res.ok) throw new Error((await res.json()).detail || "Lookup failed");
+    renderCDLIResults(await res.json());
+  } catch (e) {
+    container.innerHTML = `<p class="cdli-error">${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Lookup";
   }
 }
 
@@ -262,7 +297,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("input-text").addEventListener("keydown", e => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitTranslation();
   });
-  document.getElementById("cdli-query").addEventListener("keydown", e => {
-    if (e.key === "Enter") cdliSearch();
+  document.getElementById("cdli-pnum-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") cdliLookup();
   });
+  loadCDLIFilters();
 });

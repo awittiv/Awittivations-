@@ -245,7 +245,7 @@ async def examples():
     ]
 
 
-CDLI_SEARCH = "https://cdli.earth/search?format=json"
+CDLI_BASE   = "https://cdli.earth/search?format=json"
 CDLI_PHOTO  = "https://cdli.earth/dl/photo/{p}.jpg"
 CDLI_HEADERS = {"User-Agent": "CuneiformTranslator/1.0 (research tool)"}
 
@@ -290,20 +290,79 @@ def _clean_artifact(a: dict) -> dict:
 
 @app.get("/api/cdli/search")
 async def cdli_search(
-    q: str = Query(..., min_length=1),
+    period: str = Query(None),
+    genre:  str = Query(None),
+    p_number: str = Query(None),
     limit: int = Query(12, ge=1, le=50),
 ):
+    # Direct P-number lookup
+    if p_number:
+        p = p_number.upper().strip()
+        if not (p.startswith("P") and p[1:].isdigit()):
+            raise HTTPException(status_code=400, detail="Invalid P-number (e.g. P106294)")
+        try:
+            raw = _cdli_get(f"https://cdli.earth/api/artifacts/{p}")
+            artifact = json.loads(raw)
+            return [_clean_artifact(artifact)]
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise HTTPException(status_code=404, detail=f"{p} not found in CDLI")
+            raise HTTPException(status_code=502, detail=f"CDLI error: {e}")
+        except (urllib.error.URLError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+
+    # Filter by period / genre
+    params = f"&limit={limit}"
+    if period:
+        params += f"&period={urllib.parse.quote(period)}"
+    if genre:
+        params += f"&genre={urllib.parse.quote(genre)}"
+
     try:
-        url = f"{CDLI_SEARCH}&q={urllib.parse.quote(q)}&limit={limit}"
-        raw = _cdli_get(url)
+        raw = _cdli_get(f"{CDLI_BASE}{params}")
         artifacts = json.loads(raw)
     except urllib.error.URLError as e:
         raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="CDLI returned unexpected response")
 
-    results = [_clean_artifact(a) for a in artifacts]
-    return results
+    return [_clean_artifact(a) for a in artifacts]
+
+
+@app.get("/api/cdli/filters")
+async def cdli_filters():
+    return {
+        "periods": [
+            "Uruk IV (ca. 3350-3200 BC)",
+            "Uruk III (ca. 3200-3000 BC)",
+            "Early Dynastic I-II (ca. 2900-2700 BC)",
+            "Early Dynastic IIIa (ca. 2600-2500 BC)",
+            "Early Dynastic IIIb (ca. 2500-2340 BC)",
+            "Ebla (ca. 2350-2300 BC)",
+            "Lagash II (ca. 2200-2100 BC)",
+            "Ur III (ca. 2100-2000 BC)",
+            "Old Babylonian (ca. 1900-1600 BC)",
+            "Old Assyrian (ca. 1950-1850 BC)",
+            "Middle Babylonian (ca. 1400-1100 BC)",
+            "Middle Assyrian (ca. 1400-1000 BC)",
+            "Neo-Assyrian (ca. 911-612 BC)",
+            "Neo-Babylonian (ca. 626-539 BC)",
+            "Achaemenid (547-331 BC)",
+        ],
+        "genres": [
+            "Administrative",
+            "Legal",
+            "Letter",
+            "Literary",
+            "Lexical",
+            "Mathematical",
+            "Medical",
+            "Astronomical",
+            "Royal or monumental",
+            "Ritual",
+            "Votive",
+        ],
+    }
 
 
 class CDLITranslateRequest(BaseModel):

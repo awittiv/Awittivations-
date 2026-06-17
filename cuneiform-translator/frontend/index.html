@@ -56,9 +56,14 @@
 
         <!-- CDLI search panel -->
         <div id="panel-cdli" hidden>
-          <div class="cdli-search-bar">
-            <input type="text" id="cdli-query" placeholder="Search tablets… e.g. grain receipt, Hammurabi, flood" spellcheck="false" />
-            <button id="cdli-search-btn" onclick="cdliSearch()">Search</button>
+          <div class="cdli-filters">
+            <select id="cdli-period"><option value="">All periods</option></select>
+            <select id="cdli-genre"><option value="">All genres</option></select>
+            <button id="cdli-search-btn" onclick="cdliSearch()">Browse</button>
+          </div>
+          <div class="cdli-pnum-bar">
+            <input type="text" id="cdli-pnum-input" placeholder="Or jump to a P-number e.g. P106294" spellcheck="false" />
+            <button id="cdli-pnum-btn" onclick="cdliLookup()">Lookup</button>
           </div>
           <div id="cdli-results" class="cdli-results"></div>
         </div>
