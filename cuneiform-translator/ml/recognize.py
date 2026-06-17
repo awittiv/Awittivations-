@@ -176,35 +176,79 @@ class CuneiformRecognizer:
             print(f"[recognize] Detector load failed: {e}")
             return False
 
-    def _detect_signs(self, img: Image.Image, score_thresh: float = 0.5) -> list[tuple[int, int, int, int]]:
+    def _detect_signs(self, img: Image.Image, score_thresh: float = 0.2) -> list[tuple[int, int, int, int]]:
         """
         Run Faster R-CNN detector. Returns list of (x1, y1, x2, y2) in original image coords.
+        Automatically picks whole-image or tiled inference based on detector_info.json.
         """
         import torchvision.transforms.functional as TF
+        from torchvision.ops import nms
+
+        # Determine if model was trained on tiles
+        tile_size = None
+        tile_stride = None
+        resize_max = DETECTOR_MAX_SIZE
+        if DETECTOR_INFO_PATH.exists():
+            dinfo = json.loads(DETECTOR_INFO_PATH.read_text())
+            if dinfo.get("type", "").endswith("_tiled"):
+                tile_size = dinfo.get("tile_size", 512)
+                tile_stride = dinfo.get("tile_stride", 256)
+                resize_max = dinfo.get("resize_max", 1200)
 
         w, h = img.size
-        scale = min(DETECTOR_MAX_SIZE / max(w, h), 1.0)
+        scale = min(resize_max / max(w, h), 1.0)
         if scale < 1.0:
-            img_r = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+            img_rs = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         else:
-            img_r = img
+            img_rs = img
             scale = 1.0
+        rw, rh = img_rs.size
 
-        img_t = TF.to_tensor(img_r.convert("RGB"))
-        with torch.no_grad():
-            outputs = self._detector([img_t])[0]
+        all_boxes: list[list[float]] = []
+        all_scores: list[float] = []
 
-        boxes_out = []
-        for box, score in zip(outputs["boxes"], outputs["scores"]):
-            if score.item() < score_thresh:
-                continue
-            x1, y1, x2, y2 = box.tolist()
-            # Scale back to original image coordinates
-            boxes_out.append((
-                int(x1 / scale), int(y1 / scale),
-                int(x2 / scale), int(y2 / scale),
-            ))
-        return boxes_out
+        if tile_size:
+            # Tiled inference — must match training domain
+            stride = tile_stride or tile_size // 2
+            ys = list(range(0, max(1, rh - tile_size), stride)) + [max(0, rh - tile_size)]
+            xs = list(range(0, max(1, rw - tile_size), stride)) + [max(0, rw - tile_size)]
+            for y0 in sorted(set(ys)):
+                y1e = min(y0 + tile_size, rh)
+                for x0 in sorted(set(xs)):
+                    x1e = min(x0 + tile_size, rw)
+                    patch = img_rs.crop((x0, y0, x1e, y1e))
+                    img_t = TF.to_tensor(patch.convert("RGB"))
+                    with torch.no_grad():
+                        out = self._detector([img_t])[0]
+                    for box, sc in zip(out["boxes"], out["scores"]):
+                        if sc.item() >= score_thresh:
+                            bx1, by1, bx2, by2 = box.tolist()
+                            all_boxes.append([bx1 + x0, by1 + y0, bx2 + x0, by2 + y0])
+                            all_scores.append(sc.item())
+            if not all_boxes:
+                return []
+            boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
+            scores_t = torch.tensor(all_scores)
+            keep = nms(boxes_t, scores_t, iou_threshold=0.5)
+            boxes_t = boxes_t[keep]
+        else:
+            # Whole-image inference
+            img_t = TF.to_tensor(img_rs.convert("RGB"))
+            with torch.no_grad():
+                out = self._detector([img_t])[0]
+            for box, sc in zip(out["boxes"], out["scores"]):
+                if sc.item() >= score_thresh:
+                    all_boxes.append(box.tolist())
+                    all_scores.append(sc.item())
+            if not all_boxes:
+                return []
+            boxes_t = torch.tensor(all_boxes, dtype=torch.float32)
+
+        # Scale back to original image coordinates
+        return [
+            (int(b[0] / scale), int(b[1] / scale), int(b[2] / scale), int(b[3] / scale))
+            for b in boxes_t.tolist()
+        ]
 
     # ── Main entry point ─────────────────────────────────────────────────────
 
