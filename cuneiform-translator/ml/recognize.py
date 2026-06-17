@@ -283,7 +283,7 @@ class CuneiformRecognizer:
         median_h = heights[len(heights) // 2]
         row_unit = max(median_h, 15)
 
-        # Classify each detected crop, collect (y_center, x, sign) tuples
+        # Classify each detected crop, collect (y_center, x1, sign, box) tuples
         detections = []
         for x1, y1, x2, y2 in boxes:
             pad = max(2, int(min(x2 - x1, y2 - y1) * 0.1))
@@ -295,35 +295,40 @@ class CuneiformRecognizer:
             cls_idx, _ = self.classify_patch(crop)
             sign = self._netidx_to_sign.get(cls_idx, "x")
             y_center = (y1 + y2) / 2
-            detections.append((y_center, x1, sign))
+            detections.append((y_center, x1, sign, x1, y1, x2, y2))
 
-        # Greedy line clustering: sort by y, group within row_unit/2 tolerance
+        # Greedy line clustering by y-center
         detections.sort(key=lambda t: t[0])
-        line_groups: list[list[tuple[int, str]]] = []
-        current_line: list[tuple[int, str]] = []
+        line_groups: list[list[tuple]] = []
+        current_line: list[tuple] = []
         current_y = None
-        for y_center, x, sign in detections:
+        for det in detections:
+            y_center = det[0]
             if current_y is None or abs(y_center - current_y) > row_unit * 0.6:
                 if current_line:
                     line_groups.append(current_line)
-                current_line = [(x, sign)]
+                current_line = [det]
                 current_y = y_center
             else:
-                current_line.append((x, sign))
-                current_y = (current_y + y_center) / 2  # running mean
+                current_line.append(det)
+                current_y = (current_y + y_center) / 2
         if current_line:
             line_groups.append(current_line)
 
         atf_lines = []
+        det_out = []
         for line_no, signs in enumerate(line_groups, 1):
-            signs_sorted = sorted(signs, key=lambda t: t[0])
-            atf_lines.append(f"{line_no}. " + " ".join(s for _, s in signs_sorted))
+            signs_sorted = sorted(signs, key=lambda t: t[1])  # sort by x1
+            atf_lines.append(f"{line_no}. " + " ".join(t[2] for t in signs_sorted))
+            for _, _, sign, bx1, by1, bx2, by2 in signs_sorted:
+                det_out.append({"x1": bx1, "y1": by1, "x2": bx2, "y2": by2, "sign": sign})
 
         return {
             "transliteration": "\n".join(atf_lines) if atf_lines else "(no signs detected)",
             "n_patches": len(boxes),
             "n_high_conf": len(boxes),
             "detector": "faster_rcnn",
+            "detections": det_out,
         }
 
     def _read_sliding_window(self, img: Image.Image) -> dict:

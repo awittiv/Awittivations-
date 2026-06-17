@@ -347,9 +347,11 @@ function setMlImage(file) {
   mlSelectedFile = file;
   const reader = new FileReader();
   reader.onload = e => {
-    document.getElementById("ml-image-preview").src = e.target.result;
+    const img = document.getElementById("ml-image-preview");
+    img.src = e.target.result;
     document.getElementById("ml-drop-zone-inner").hidden = true;
     document.getElementById("ml-image-preview-wrap").hidden = false;
+    clearDetections();
   };
   reader.readAsDataURL(file);
 }
@@ -360,7 +362,80 @@ function clearMlImage() {
   document.getElementById("ml-image-preview").src = "";
   document.getElementById("ml-drop-zone-inner").hidden = false;
   document.getElementById("ml-image-preview-wrap").hidden = true;
+  clearDetections();
   hideResult();
+}
+
+function clearDetections() {
+  _lastDetections = null; _lastImgW = null; _lastImgH = null;
+  const canvas = document.getElementById("ml-detect-canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawDetections(detections, imgNaturalW, imgNaturalH) {
+  if (!detections || !detections.length) return;
+
+  const img = document.getElementById("ml-image-preview");
+  const canvas = document.getElementById("ml-detect-canvas");
+
+  // Match canvas pixel size to the image's rendered size
+  const rect = img.getBoundingClientRect();
+  canvas.width  = rect.width;
+  canvas.height = rect.height;
+
+  // Image is letterboxed (object-fit: contain) — compute actual render area
+  const imgAspect = imgNaturalW / imgNaturalH;
+  const boxAspect = rect.width / rect.height;
+  let renderW, renderH, offsetX, offsetY;
+  if (imgAspect > boxAspect) {
+    renderW = rect.width;
+    renderH = rect.width / imgAspect;
+    offsetX = 0;
+    offsetY = (rect.height - renderH) / 2;
+  } else {
+    renderH = rect.height;
+    renderW = rect.height * imgAspect;
+    offsetX = (rect.width - renderW) / 2;
+    offsetY = 0;
+  }
+
+  const scaleX = renderW / imgNaturalW;
+  const scaleY = renderH / imgNaturalH;
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Cuneiform-themed palette: rotate through a few warm colours
+  const palette = ["#e8a020", "#d45010", "#20a870", "#6060e0", "#c03080"];
+
+  detections.forEach((d, i) => {
+    const x = offsetX + d.x1 * scaleX;
+    const y = offsetY + d.y1 * scaleY;
+    const w = (d.x2 - d.x1) * scaleX;
+    const h = (d.y2 - d.y1) * scaleY;
+    const color = palette[i % palette.length];
+
+    // Box
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+
+    // Semi-transparent fill
+    ctx.fillStyle = color + "28";
+    ctx.fillRect(x, y, w, h);
+
+    // Label above box
+    const label = d.sign;
+    const fontSize = Math.max(9, Math.min(13, h * 0.55));
+    ctx.font = `bold ${fontSize}px monospace`;
+    const textW = ctx.measureText(label).width;
+    const labelX = Math.min(x, canvas.width - textW - 3);
+    const labelY = y > fontSize + 2 ? y - 2 : y + h + fontSize + 1;
+
+    ctx.fillStyle = color;
+    ctx.fillText(label, labelX, labelY);
+  });
 }
 
 async function mlRecognize() {
@@ -375,7 +450,13 @@ async function mlRecognize() {
     form.append("file", mlSelectedFile);
     const res = await fetch(`${API}/api/ml/recognize`, { method: "POST", body: form });
     if (!res.ok) throw new Error((await res.json()).detail || "Recognition failed");
-    renderResult(await res.json(), true);
+    const data = await res.json();
+    renderResult(data, true);
+    // Draw bounding boxes once the image has rendered
+    const img = document.getElementById("ml-image-preview");
+    _lastDetections = data.detections; _lastImgW = data.image_width; _lastImgH = data.image_height;
+    const doDraw = () => drawDetections(data.detections, data.image_width, data.image_height);
+    if (img.complete) doDraw(); else img.onload = doDraw;
   } catch (e) {
     showError(e.message);
   } finally {
@@ -385,6 +466,11 @@ async function mlRecognize() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+
+let _lastDetections = null, _lastImgW = null, _lastImgH = null;
+window.addEventListener("resize", () => {
+  if (_lastDetections) drawDetections(_lastDetections, _lastImgW, _lastImgH);
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   loadExamples();

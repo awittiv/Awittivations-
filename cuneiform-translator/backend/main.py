@@ -144,6 +144,14 @@ Respond in this JSON format:
 }"""
 
 
+class Detection(BaseModel):
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    sign: str
+
+
 class ImageTranslateResponse(BaseModel):
     language: str
     period: str | None
@@ -153,6 +161,9 @@ class ImageTranslateResponse(BaseModel):
     notes: list[str]
     confidence: str
     confidence_reason: str
+    detections: list[Detection] | None = None
+    image_width: int | None = None
+    image_height: int | None = None
 
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -508,6 +519,7 @@ async def ml_recognize(file: UploadFile = File(...)):
         recognizer = get_recognizer()
         result = recognizer.read_tablet(img)
         transliteration = result["transliteration"]
+        raw_detections = result.get("detections", [])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sign recognition failed: {e}")
 
@@ -537,6 +549,12 @@ async def ml_recognize(file: UploadFile = File(...)):
                 raw = raw[4:]
         translation_result = json.loads(raw.strip())
         translation_result["transliteration"] = transliteration
+        translation_result["detections"] = [
+            Detection(x1=d["x1"], y1=d["y1"], x2=d["x2"], y2=d["y2"], sign=d["sign"])
+            for d in raw_detections
+        ]
+        translation_result["image_width"] = img.width
+        translation_result["image_height"] = img.height
         return ImageTranslateResponse(**translation_result)
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Model returned malformed response")

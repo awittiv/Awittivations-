@@ -84,7 +84,10 @@
               <p class="drop-sub">Faster R-CNN detector + EfficientNet classifier · Neo-Assyrian tablets</p>
             </div>
             <div id="ml-image-preview-wrap" hidden>
-              <img id="ml-image-preview" alt="Tablet preview" />
+              <div class="ml-canvas-wrap">
+                <img id="ml-image-preview" alt="Tablet preview" />
+                <canvas id="ml-detect-canvas"></canvas>
+              </div>
               <button class="clear-btn" onclick="clearMlImage()">&#x2715; Remove</button>
             </div>
           </div>
