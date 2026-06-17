@@ -90,8 +90,12 @@ class CuneiformRecognizer:
 
         info = json.loads(INFO_PATH.read_text())
         n_classes = info["n_classes"]
+        backbone  = info.get("backbone", "efficientnet_b0")
 
-        clf = models.efficientnet_b0(weights=None)
+        if backbone == "efficientnet_b2":
+            clf = models.efficientnet_b2(weights=None)
+        else:
+            clf = models.efficientnet_b0(weights=None)
         in_features = clf.classifier[1].in_features
         clf.classifier = nn.Sequential(
             nn.Dropout(p=0.3, inplace=True),
@@ -107,6 +111,35 @@ class CuneiformRecognizer:
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ])
+        # TTA transforms: flip + brightness variants averaged at inference
+        self._tta_transforms = [
+            transforms.Compose([
+                transforms.Resize((crop_size, crop_size)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]),
+            transforms.Compose([
+                transforms.Resize((crop_size, crop_size)),
+                transforms.RandomHorizontalFlip(p=1.0),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]),
+            transforms.Compose([
+                transforms.Resize((crop_size + 8, crop_size + 8)),
+                transforms.CenterCrop(crop_size),
+                transforms.ColorJitter(brightness=0.3),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]),
+            transforms.Compose([
+                transforms.Resize((crop_size + 8, crop_size + 8)),
+                transforms.CenterCrop(crop_size),
+                transforms.RandomHorizontalFlip(p=1.0),
+                transforms.ColorJitter(brightness=0.3),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]),
+        ]
 
         # Build network_idx → sign name mapping (accounts for lexicographic sort)
         c2i = info["class_to_idx"]  # folder_str → network_idx
@@ -138,11 +171,24 @@ class CuneiformRecognizer:
 
     def classify_patch(self, patch: Image.Image) -> tuple[int, float]:
         self._load_classifier()
-        x = self._classifier_transform(patch.convert("RGB")).unsqueeze(0)
-        with torch.no_grad():
-            logits = self._classifier(x)
-            probs = torch.softmax(logits, dim=1)
-            conf, cls = probs.max(dim=1)
+        rgb = patch.convert("RGB")
+        tta_tfs = getattr(self, "_tta_transforms", None)
+        if tta_tfs:
+            # Average softmax over all TTA views
+            with torch.no_grad():
+                avg_probs = None
+                for tf in tta_tfs:
+                    x = tf(rgb).unsqueeze(0)
+                    p = torch.softmax(self._classifier(x), dim=1)
+                    avg_probs = p if avg_probs is None else avg_probs + p
+                avg_probs = avg_probs / len(tta_tfs)
+            conf, cls = avg_probs.max(dim=1)
+        else:
+            x = self._classifier_transform(rgb).unsqueeze(0)
+            with torch.no_grad():
+                logits = self._classifier(x)
+                probs = torch.softmax(logits, dim=1)
+                conf, cls = probs.max(dim=1)
         return cls.item(), conf.item()
 
     # ── Detector ─────────────────────────────────────────────────────────────
