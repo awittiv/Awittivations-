@@ -1,0 +1,394 @@
+
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<h2 class="sr-only">Awittivations Command Center — project milestones, open tasks, document status, and build notes</h2>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--gold:#c9993a;--gl:#e8c060;--gd:#7a5a1a;--bg:#080808;--bg2:#0f0f0f;--bg3:#161616;--bg4:#1e1e1e;--b:#2a2a2a;--b2:#333;--t:#e8e4dc;--t2:#9a9690;--t3:#5a5652;--g:#3ecf8e;--r:#f25a5a;--am:#e8a838;--bl:#5ab4f2}
+body{background:var(--bg);color:var(--t);font-family:'Figtree',sans-serif;font-size:14px;max-width:480px;margin:0 auto;padding-bottom:20px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.hdr{padding:14px 16px 10px;border-bottom:1px solid var(--b)}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.hdr-title{font-family:'Instrument Serif',serif;font-size:19px;color:var(--gl);display:flex;align-items:center;gap:8px}
+.hdr-dot{width:7px;height:7px;border-radius:50%;background:var(--g);animation:pls 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pls{0%,100%{opacity:1}50%{opacity:.3}}
+.hdr-date{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3)}
+.hdr-sub{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--t3);letter-spacing:.14em;text-transform:uppercase}
+.urgs{padding:10px 16px 0}
+.urg{display:flex;align-items:flex-start;gap:9px;border-radius:8px;padding:10px 11px;margin-bottom:8px}
+.urg.crit{background:rgba(242,90,90,.07);border:1px solid rgba(242,90,90,.2)}
+.urg.warn{background:rgba(232,168,56,.06);border:1px solid rgba(232,168,56,.18)}
+.urg-ico{font-size:15px;flex-shrink:0;margin-top:1px}
+.urg-title{font-size:11px;font-weight:600;margin-bottom:2px}
+.urg.crit .urg-title{color:var(--r)}
+.urg.warn .urg-title{color:var(--am)}
+.urg-desc{font-size:10px;color:var(--t2);font-family:'JetBrains Mono',monospace;line-height:1.45}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 16px 0}
+.stat{background:var(--bg3);border:1px solid var(--b);border-radius:8px;padding:9px 6px;text-align:center}
+.stat-v{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;line-height:1}
+.stat-l{font-size:7px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-top:3px}
+.tabs{display:flex;border-bottom:1px solid var(--b);margin-top:12px;padding:0 16px}
+.tab{flex:1;text-align:center;padding:9px 0 7px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;user-select:none}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.panel{display:none;padding:12px 16px}
+.panel.active{display:block}
+.sec{margin-bottom:18px}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;padding-bottom:6px;border-bottom:1px solid var(--b)}
+.sec-title{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--t3);letter-spacing:.18em;text-transform:uppercase}
+.sec-cnt{background:var(--bg4);border-radius:10px;padding:1px 7px;font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--t3)}
+.task{display:flex;align-items:flex-start;gap:10px;padding:10px 11px;background:var(--bg3);border:1px solid var(--b);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.task:active{background:var(--bg4)}
+.task.done{opacity:.38}
+.t-chk{width:19px;height:19px;border-radius:50%;border:1.5px solid var(--b2);flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.task.done .t-chk{background:var(--g);border-color:var(--g)}
+.t-chk-inner{display:none;font-size:11px;color:var(--bg);font-weight:700;line-height:1}
+.task.done .t-chk-inner{display:block}
+.t-body{flex:1;min-width:0}
+.t-title{font-size:12px;color:var(--t);line-height:1.45}
+.task.done .t-title{text-decoration:line-through;color:var(--t3)}
+.t-meta{display:flex;align-items:center;gap:5px;margin-top:4px;flex-wrap:wrap}
+.t-proj{font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--t3)}
+.tbadge{font-size:7px;font-family:'JetBrains Mono',monospace;padding:1px 6px;border-radius:3px;letter-spacing:.04em}
+.tb-u{background:rgba(242,90,90,.12);color:var(--r)}
+.tb-w{background:rgba(232,168,56,.1);color:var(--am)}
+.tb-n{background:rgba(154,150,144,.07);color:var(--t3)}
+.t-dl{font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--r);margin-left:auto}
+.proj{background:var(--bg3);border:1px solid var(--b);border-radius:10px;padding:13px;margin-bottom:9px}
+.proj-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.proj-name{font-family:'Instrument Serif',serif;font-size:15px;color:var(--t)}
+.pstatus{font-size:8px;font-family:'JetBrains Mono',monospace;padding:2px 8px;border-radius:12px;letter-spacing:.05em}
+.ps-a{background:rgba(62,207,142,.1);color:var(--g);border:1px solid rgba(62,207,142,.18)}
+.ps-p{background:rgba(232,168,56,.1);color:var(--am);border:1px solid rgba(232,168,56,.18)}
+.proj-desc{font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:8px}
+.ptags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.ptag{font-size:8px;font-family:'JetBrains Mono',monospace;background:var(--bg4);border:1px solid var(--b2);border-radius:3px;padding:2px 6px;color:var(--t3)}
+.prog-lbl{display:flex;justify-content:space-between;font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--t3);margin-bottom:3px}
+.prog-track{height:3px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px}
+.rev-target{margin-top:8px;padding-top:8px;border-top:1px solid var(--b);font-size:10px;color:var(--t2);font-family:'JetBrains Mono',monospace}
+.doc{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--bg3);border:1px solid var(--b);border-radius:8px;margin-bottom:6px}
+.doc-left{flex:1;min-width:0}
+.doc-name{font-size:11px;color:var(--t);margin-bottom:2px}
+.doc-type{font-size:8px;color:var(--t3);font-family:'JetBrains Mono',monospace}
+.dstat{font-size:8px;font-family:'JetBrains Mono',monospace;padding:2px 8px;border-radius:4px;letter-spacing:.04em;flex-shrink:0;white-space:nowrap}
+.ds-r{background:rgba(62,207,142,.1);color:var(--g)}
+.ds-p{background:rgba(90,180,242,.1);color:var(--bl)}
+.ds-m{background:rgba(242,90,90,.12);color:var(--r)}
+.ds-t{background:rgba(232,168,56,.1);color:var(--am)}
+.ms{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid var(--b)}
+.ms:last-child{border-bottom:none}
+.ms-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.msd{background:var(--g)}
+.msu{background:var(--am);animation:pls 2s ease-in-out infinite}
+.msf{background:var(--b2)}
+.msur{background:var(--r);animation:pls 1.2s ease-in-out infinite}
+.ms-right{}
+.ms-date{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--t3);margin-bottom:2px}
+.ms-title{font-size:12px;color:var(--t)}
+.ms-desc{font-size:10px;color:var(--t3);margin-top:2px;line-height:1.4}
+.note{background:var(--bg3);border:1px solid var(--b);border-radius:8px;margin-bottom:7px;overflow:hidden}
+.note-hdr{padding:11px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.note-proj{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);letter-spacing:.05em}
+.note-arr{font-size:11px;color:var(--t3);transition:transform .25s}
+.note.open .note-arr{transform:rotate(180deg)}
+.note-body{display:none;padding:0 12px 11px}
+.note.open .note-body{display:block;padding-top:9px;border-top:1px solid var(--b)}
+.nrow{display:flex;gap:8px;padding:3px 0}
+.nk{font-size:9px;color:var(--t3);font-family:'JetBrains Mono',monospace;flex-shrink:0;width:80px;line-height:1.4}
+.nv{font-size:9px;color:var(--t2);font-family:'JetBrains Mono',monospace;flex:1;line-height:1.5}
+.nv.hl{color:var(--am)}.nv.danger{color:var(--r)}
+.fin-box{background:var(--bg3);border:1px solid var(--b);border-radius:10px;padding:13px;margin-bottom:9px}
+.fin-title{font-family:'Instrument Serif',serif;font-size:14px;color:var(--gl);margin-bottom:10px}
+.fin-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--b)}
+.fin-row:last-child{border-bottom:none}
+.fin-label{font-size:11px;color:var(--t2)}
+.fin-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500}
+::-webkit-scrollbar{width:2px}::-webkit-scrollbar-thumb{background:var(--b2)}
+</style>
+
+<div id="cmd">
+  <header class="hdr">
+    <div class="hdr-row">
+      <div class="hdr-title"><div class="hdr-dot"></div>Command Center</div>
+      <div class="hdr-date" id="hdate"></div>
+    </div>
+    <div class="hdr-sub">Awittivations L.L.C. · Project Intelligence · Updated Jun 18 2026</div>
+  </header>
+  <div class="urgs" id="urgs"></div>
+  <div class="stats" id="stats"></div>
+  <div class="tabs" id="tabs">
+    <div class="tab active" onclick="showTab('tasks',this)">Tasks</div>
+    <div class="tab" onclick="showTab('projects',this)">Projects</div>
+    <div class="tab" onclick="showTab('docs',this)">Docs</div>
+    <div class="tab" onclick="showTab('build',this)">Build</div>
+  </div>
+  <div id="tasks" class="panel active"></div>
+  <div id="projects" class="panel"></div>
+  <div id="docs" class="panel"></div>
+  <div id="build" class="panel"></div>
+</div>
+
+<script>
+// ── DATA (updated June 18 2026) ──
+const TASKS=[
+  {id:'t1',title:'Reactivate Zoho DataPrep — scheduled deletion May 22',proj:'Admin',pri:'urgent',dl:'May 22'},
+  {id:'t2',title:'Unpause Supabase "Cash Pilot" project at lgzokurllktgdldircnc.supabase.co',proj:'CashPilot',pri:'urgent',dl:'Jun 21 ↯ 3 DAYS'},
+  {id:'t3',title:'Submit NSF SBIR Phase I final proposal for Harmonic Protocol',proj:'CashPilot',pri:'urgent'},
+  {id:'t4',title:'Download and complete SBA Form 1919 (Borrower Info) from SBA.gov',proj:'SBA 7(a)',pri:'warn'},
+  {id:'t5',title:'Complete SBA Form 413 — input bank balances, real estate, retirement data',proj:'SBA 7(a)',pri:'warn'},
+  {id:'t6',title:'Draft "No Tax Return Filed" explanation (entity new in 2026)',proj:'SBA 7(a)',pri:'warn'},
+  {id:'t7',title:'Export AI Governance Framework as PDF for lenders',proj:'Harmonic',pri:'warn'},
+  {id:'t8',title:'Secure formal contractor bid from Albert Witt V for SBA Use of Proceeds',proj:'E-Bike Nexus',pri:'warn'},
+  {id:'t9',title:'Integrate FATF Travel Rule Standard 16 compliance metadata header into Harmonic Protocol',proj:'Harmonic',pri:'warn'},
+  {id:'t10',title:'NBFC outreach — top 10 RBI Innovation Sandbox targets (India)',proj:'CashPilot',pri:'warn'},
+  {id:'t11',title:'Move SBA docs into SBA_Submission_2026 Drive folder',proj:'SBA 7(a)',pri:'normal'},
+  {id:'t12',title:'Schedule lending officer review meeting for SBA ITL',proj:'SBA 7(a)',pri:'normal'},
+  {id:'t13',title:'Update Bankit narrative to RWA taxonomy (away from Utility Token framing)',proj:'Bankit',pri:'normal'},
+  {id:'t14',title:'Complete Delaware C-Corp conversion — entity name pending registration',proj:'Corporate',pri:'warn'},
+  {id:'t15',title:'File Form 5076 — personal property tax exemption for E-Bike Nexus hardware',proj:'E-Bike Nexus',pri:'normal'},
+  {id:'t16',title:'Sign first Muskegon retail location for Volt-Point pilot',proj:'E-Bike Nexus',pri:'normal'},
+  {id:'t17',title:'Trigger press release to local news upon first E-Bike site signing',proj:'E-Bike Nexus',pri:'normal'},
+];
+
+const PROJECTS=[
+  {name:'CashPilot™',status:'active',desc:'AI cash flow forecasting for underserved SMEs. Sprint 1 of 12-month NSF SBIR roadmap — building data ingestion layer + core architecture. Supabase paused since Mar 28.',tags:['Next.js 16','Supabase','Claude API','ARIMA','NSF SBIR $314K'],prog:12,milestone:'Sprint 1 — Data Ingestion Layer'},
+  {name:'Bankit / Harmonic Protocol',status:'active',desc:'Non-custodial RWA-to-crypto bridge on Polygon L2. Repositioned under SBA 7(a) International Trade Loan framework. FATF Travel Rule compliance header required.',tags:['Polygon L2','FastAPI','FATF Std 16','US-India Corridor','SBA ITL 90%'],prog:35,milestone:'SBA 7(a) ITL Application — Active'},
+  {name:'E-Bike Nexus (Volt-Point)',status:'pending',desc:'IoT smart charging pilot, Muskegon/Norton Shores. Shelly Pro 4PM relay, NEMA 3R/4 enclosure, QR tap-to-start. ~$1,200 CAPEX per station vs $5K+ proprietary.',tags:['Shelly Pro 4PM','IoT','Form 5076','Witt Contractors','Muskegon'],prog:20,milestone:'First site signing — pending'},
+  {name:'Multi-Agent Orchestrator',status:'active',desc:'Blueprint Router → Agent Dispatch → Wedge Engine → Human Gate. FastAPI backend with SHA-256 audit trail per execution. Railway deployment target.',tags:['FastAPI','Railway','Wedge Engine','Telegram','GovernanceGate'],prog:65,milestone:'Production backend — ready'},
+];
+
+const DOCS=[
+  {name:'Executive Cover Letter',type:'SBA 7(a)',st:'r'},
+  {name:'Use of Proceeds — May 2026',type:'SBA 7(a)',st:'r'},
+  {name:'3-Year Pro Forma Projections',type:'SBA 7(a)',st:'r'},
+  {name:'LOI — E-Bike Infrastructure',type:'SBA 7(a)',st:'r'},
+  {name:'Assumption of Liabilities Memo',type:'SBA 7(a)',st:'r'},
+  {name:'SBA Application Tracker',type:'SBA 7(a)',st:'r'},
+  {name:'SBA Form 1919 (Borrower Info)',type:'SBA 7(a)',st:'m'},
+  {name:'SBA Form 413 (Personal Financial)',type:'SBA 7(a)',st:'p'},
+  {name:'SBA Form 912 (Personal History)',type:'SBA 7(a)',st:'t'},
+  {name:'Business Tax Returns (3-Year)',type:'SBA 7(a)',st:'m'},
+  {name:'AI Governance Framework — PDF',type:'Compliance',st:'p'},
+  {name:'AI Compliance Certificate (Q2 2026)',type:'Compliance',st:'r'},
+  {name:'NSF SBIR Technical Narrative',type:'CashPilot',st:'r'},
+  {name:'Master Project Update — May 2026',type:'Strategy',st:'r'},
+  {name:'Delaware C-Corp Conversion Docs',type:'Corporate',st:'p'},
+];
+
+const MILESTONES=[
+  {date:'Apr 5, 2026',title:'NSF SBIR Phase I Deadline',desc:'Submitted — under review',s:'done'},
+  {date:'Apr 5, 2026',title:'AI Compliance Certificate Adopted',desc:'AWIT-AIS-2026-01 formally ratified',s:'done'},
+  {date:'May 7, 2026',title:'SBA 7(a) ITL Package Drafted',desc:'6 core documents complete, signatures needed',s:'done'},
+  {date:'May 22, 2026',title:'Zoho DataPrep — Reactivated',desc:'Deadline passed. Account reactivated.',s:'done'},
+  {date:'Jun 21, 2026',title:'⚠ Supabase Unpause Deadline',desc:'3 DAYS LEFT — unpause or lose all CashPilot data at lgzokurllktgdldircnc',s:'urgent'},
+  {date:'TBD',title:'SBA 7(a) ITL Lender Submission',desc:'Pending Form 1919, Form 413, tax docs',s:'future'},
+  {date:'TBD',title:'Delaware C-Corp Conversion',desc:'Entity name pending, O\'Shaughnessy Fellows requirement',s:'future'},
+  {date:'TBD',title:'E-Bike Nexus First Site Launch',desc:'Muskegon retail partner — triggers press release',s:'future'},
+  {date:'Q3 2026',title:'GIFT City IFSCA Registration',desc:'7-step sequence in progress, SPJIMR/RBIH outreach sent',s:'upcoming'},
+  {date:'Q3-Q4 2026',title:'DIFC FinTech Hive — UAE',desc:'Outreach sent to fintechhive@difc.ae',s:'upcoming'},
+];
+
+const BUILD=[
+  {proj:'CashPilot™',rows:[
+    {k:'Stack',v:'Next.js 16, TypeScript, Tailwind, Supabase, Anthropic SDK, Recharts'},
+    {k:'Supabase',v:'lgzokurllktgdldircnc.supabase.co — PAUSED since Mar 28',danger:true},
+    {k:'Architecture',v:'ARIMA baseline + LLM forecast + plain-language advisory layer'},
+    {k:'Sprint 1',v:'Data ingestion layer, core ARIMA engine, Supabase schema'},
+    {k:'NSF Ask',v:'$314,362 — Phase I, 12-month technical validation'},
+    {k:'Target',v:'33.2M US SMEs, minority/women-owned; India GIFT City; UAE DIFC'},
+  ]},
+  {proj:'Bankit / Harmonic Protocol',rows:[
+    {k:'Chain',v:'Polygon L2 — non-custodial RWA bridge, zero custody of client funds'},
+    {k:'Backend',v:'FastAPI orchestrator_api.py, SHA-256 audit trail per execution'},
+    {k:'Pipeline',v:'Blueprint Router → Agent Dispatch → Wedge Engine → Human Gate'},
+    {k:'FATF',v:'Travel Rule Std 16 compliance header — MUST INTEGRATE',hl:true},
+    {k:'Taxonomy',v:'Switching to "RWA" framing — away from "Utility Token"'},
+    {k:'Channels',v:'SMS, WhatsApp, Email, Slack, Telegram (all intake)'},
+  ]},
+  {proj:'E-Bike Nexus (Volt-Point)',rows:[
+    {k:'Smart Relay',v:'Shelly Pro 4PM — 4 outlets, DIN-rail, open API'},
+    {k:'Enclosure',v:'NEMA 3R/4 weatherproof box + commercial GFCI outlets'},
+    {k:'Connectivity',v:'Industrial 4G/LTE router via IoT SIM'},
+    {k:'Interface',v:'QR code + web landing page — tap-to-start sessions'},
+    {k:'CAPEX',v:'~$1,200/station vs $5,000+ proprietary',hl:true},
+    {k:'Contractor',v:'Albert Witt V — Michigan Building Contractor License'},
+    {k:'Tax',v:'Form 5076 — personal property exemption, assets <$80K'},
+  ]},
+  {proj:'Multi-Agent Orchestrator',rows:[
+    {k:'Repo',v:'github.com/awittiv/Awittivations-'},
+    {k:'Deploy',v:'Railway — production target'},
+    {k:'Env Vars',v:'ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN'},
+    {k:'Wedge Engine',v:'28-file linguistic governance module — pre-output gate'},
+    {k:'Gate',v:'4-layer deterministic compliance + SHA-256 audit trail'},
+    {k:'Language',v:'Python, FastAPI, proot Debian (glibc) on Termux'},
+  ]},
+];
+
+// ── STATE ──
+// Completed as of Jun 18 2026:
+// t1=Zoho reactivated, t3=NSF SBIR Phase I submitted Apr 5
+// t6=No-tax-return explanation drafted, t10=NBFC India outreach sent
+// t11=SBA docs moved to Drive folder, t13=Bankit narrative updated to RWA
+const state={done:new Set(['t1','t3','t6','t10','t11','t13'])};
+
+async function loadState(){
+  try{
+    const r=await window.storage.list('task_');
+    if(r&&r.keys){for(const k of r.keys){const v=await window.storage.get(k);if(v&&v.value==='1')state.done.add(k.replace('task_',''));}}
+  }catch(e){}
+}
+
+async function toggleTask(id){
+  if(state.done.has(id)){state.done.delete(id);try{await window.storage.delete('task_'+id);}catch(e){}}
+  else{state.done.add(id);try{await window.storage.set('task_'+id,'1');}catch(e){}}
+  renderAll();
+}
+
+// ── RENDER ──
+function renderUrgent(){
+  document.getElementById('urgs').innerHTML=`
+    <div class="urg crit"><div class="urg-ico">🚨</div><div><div class="urg-title">Supabase CashPilot — 3 DAYS LEFT</div><div class="urg-desc">Paused Mar 28. 90-day window ends Jun 21. Unpause NOW or lose all data at lgzokurllktgdldircnc.</div></div></div>
+    <div class="urg warn"><div class="urg-ico">📋</div><div><div class="urg-title">SBA 7(a) ITL — Lender Submission Pending</div><div class="urg-desc">Form 1919 and Form 413 are the remaining blockers. Schedule lending officer review.</div></div></div>`;
+}
+
+function renderStats(){
+  const open=TASKS.filter(t=>!state.done.has(t.id)).length;
+  const urgent=TASKS.filter(t=>!state.done.has(t.id)&&t.pri==='urgent').length;
+  const docsMissing=DOCS.filter(d=>d.st==='m').length;
+  const docsReady=DOCS.filter(d=>d.st==='r').length;
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="stat-v" style="color:var(--r)">${urgent}</div><div class="stat-l">Urgent</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--am)">${open}</div><div class="stat-l">Open</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--r)">${docsMissing}</div><div class="stat-l">Missing</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--g)">${docsReady}</div><div class="stat-l">Doc Ready</div></div>`;
+}
+
+function renderTasks(){
+  const groups=[
+    {label:'Urgent — Act Now',filter:t=>t.pri==='urgent'},
+    {label:'SBA 7(a) Application',filter:t=>t.pri!=='urgent'&&t.proj==='SBA 7(a)'},
+    {label:'CashPilot & Harmonic',filter:t=>t.pri!=='urgent'&&(t.proj==='CashPilot'||t.proj==='Harmonic')},
+    {label:'Bankit & Corporate',filter:t=>t.pri!=='urgent'&&(t.proj==='Bankit'||t.proj==='Corporate'||t.proj==='Admin')},
+    {label:'E-Bike Nexus',filter:t=>t.pri!=='urgent'&&t.proj==='E-Bike Nexus'},
+  ];
+  const el=document.getElementById('tasks');
+  el.innerHTML=groups.map(g=>{
+    const tasks=TASKS.filter(g.filter);
+    if(!tasks.length)return'';
+    const open=tasks.filter(t=>!state.done.has(t.id)).length;
+    return`<div class="sec">
+      <div class="sec-hdr"><span class="sec-title">${g.label}</span><span class="sec-cnt">${open}/${tasks.length}</span></div>
+      ${tasks.map(t=>`
+        <div class="task${state.done.has(t.id)?' done':''}" onclick="toggleTask('${t.id}')" role="checkbox" aria-checked="${state.done.has(t.id)}">
+          <div class="t-chk"><span class="t-chk-inner">✓</span></div>
+          <div class="t-body">
+            <div class="t-title">${t.title}</div>
+            <div class="t-meta">
+              <span class="t-proj">${t.proj}</span>
+              <span class="tbadge ${t.pri==='urgent'?'tb-u':t.pri==='warn'?'tb-w':'tb-n'}">${t.pri==='urgent'?'URGENT':t.pri==='warn'?'ACTION':'NORMAL'}</span>
+              ${t.dl?`<span class="t-dl">↯ ${t.dl}</span>`:''}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderProjects(){
+  const el=document.getElementById('projects');
+  el.innerHTML=`
+  <div class="fin-box">
+    <div class="fin-title">Financial Snapshot</div>
+    <div class="fin-row"><span class="fin-label">2026 Revenue Target</span><span class="fin-val" style="color:var(--am)">$412,500</span></div>
+    <div class="fin-row"><span class="fin-label">NSF SBIR Phase I Ask</span><span class="fin-val" style="color:var(--gold)">$314,362</span></div>
+    <div class="fin-row"><span class="fin-label">2026 Pro Forma EBITDA</span><span class="fin-val" style="color:var(--g)">$56,500</span></div>
+    <div class="fin-row"><span class="fin-label">2027 Pro Forma EBITDA</span><span class="fin-val" style="color:var(--g)">$151,000</span></div>
+    <div class="fin-row"><span class="fin-label">DSCR (SBA requirement)</span><span class="fin-val" style="color:var(--g)">>2.5x ✓</span></div>
+  </div>
+  ${PROJECTS.map(p=>`
+    <div class="proj">
+      <div class="proj-hdr">
+        <div class="proj-name">${p.name}</div>
+        <div class="pstatus ${p.status==='active'?'ps-a':'ps-p'}">${p.status==='active'?'ACTIVE':'PENDING'}</div>
+      </div>
+      <div class="proj-desc">${p.desc}</div>
+      <div class="ptags">${p.tags.map(t=>`<span class="ptag">${t}</span>`).join('')}</div>
+      <div class="prog-lbl"><span>${p.milestone}</span><span>${p.prog}%</span></div>
+      <div class="prog-track"><div class="prog-fill" style="width:${p.prog}%;background:${p.status==='active'?'var(--gold)':'var(--b2)'}"></div></div>
+    </div>`).join('')}`;
+}
+
+function renderDocs(){
+  const stLabel={r:'READY',p:'IN PROGRESS',m:'MISSING',t:'TEMPLATE'};
+  const stCls={r:'ds-r',p:'ds-p',m:'ds-m',t:'ds-t'};
+  const groups=[
+    {label:'SBA 7(a) Package',docs:DOCS.filter(d=>d.type==='SBA 7(a)')},
+    {label:'Compliance',docs:DOCS.filter(d=>d.type==='Compliance')},
+    {label:'CashPilot / Strategy',docs:DOCS.filter(d=>d.type==='CashPilot'||d.type==='Strategy')},
+    {label:'Corporate',docs:DOCS.filter(d=>d.type==='Corporate')},
+  ];
+  document.getElementById('docs').innerHTML=groups.map(g=>`
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-title">${g.label}</span><span class="sec-cnt">${g.docs.filter(d=>d.st==='r').length}/${g.docs.length} ready</span></div>
+      ${g.docs.map(d=>`
+        <div class="doc">
+          <div class="doc-left">
+            <div class="doc-name">${d.name}</div>
+            <div class="doc-type">${d.type}</div>
+          </div>
+          <div class="dstat ${stCls[d.st]}">${stLabel[d.st]}</div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+function renderBuild(){
+  const el=document.getElementById('build');
+  el.innerHTML=`
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-title">Milestones</span></div>
+      ${MILESTONES.map(m=>{
+        const dc={done:'msd',urgent:'msur',upcoming:'msu',future:'msf'}[m.s];
+        return`<div class="ms"><div class="ms-dot ${dc}"></div><div class="ms-right"><div class="ms-date">${m.date}</div><div class="ms-title">${m.title}</div><div class="ms-desc">${m.desc}</div></div></div>`;
+      }).join('')}
+    </div>
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-title">Build Notes</span><span class="sec-cnt">tap to expand</span></div>
+      ${BUILD.map((b,i)=>`
+        <div class="note${i===0?' open':''}" id="note${i}">
+          <div class="note-hdr" onclick="toggleNote(${i})">
+            <span class="note-proj">${b.proj}</span>
+            <span class="note-arr">▾</span>
+          </div>
+          <div class="note-body">
+            ${b.rows.map(r=>`<div class="nrow"><span class="nk">${r.k}</span><span class="nv${r.hl?' hl':r.danger?' danger':''}">${r.v}</span></div>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function toggleNote(i){
+  const el=document.getElementById('note'+i);
+  el.classList.toggle('open');
+}
+
+function showTab(tab,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById(tab).classList.add('active');
+}
+
+function renderAll(){
+  renderUrgent();
+  renderStats();
+  renderTasks();
+  renderProjects();
+  renderDocs();
+  renderBuild();
+}
+
+// Date
+document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+
+// Init
+loadState().then(()=>renderAll());
+</script>
