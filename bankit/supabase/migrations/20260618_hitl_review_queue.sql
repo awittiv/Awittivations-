@@ -26,7 +26,7 @@ CREATE POLICY "admin_read_hitl_queue" ON hitl_review_queue
     FOR SELECT TO authenticated
     USING (
         EXISTS (
-            SELECT 1 FROM admin_users WHERE user_id = auth.uid()
+            SELECT 1 FROM admins WHERE user_id = auth.uid()
         )
     );
 
