@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from auth import get_current_merchant_id
 from services import supabase_service
-from services.sweep_engine import execute_atomic_sweep, get_sweep_summary
+from services.sweep_engine import calculate_sweep, get_sweep_summary
+from services.hitl_gate import route_sweep
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -27,13 +28,20 @@ async def ingest_payment(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    result = await execute_atomic_sweep(
+    sweep_breakdown = calculate_sweep(body.gross_amount)
+
+    result = await route_sweep(
         merchant_id=merchant_id,
         merchant_wallet=merchant.get("wallet_address"),
         gross_amount=body.gross_amount,
         source=body.source,
         reference_id=body.reference_id,
+        sweep_breakdown=sweep_breakdown,
     )
+
+    # HITL gate queued this for human review
+    if result.get("status") == "PENDING_HUMAN_REVIEW":
+        return result
 
     return {
         "sweep_id": result["sweep_id"],

@@ -50,15 +50,20 @@ async def execute_atomic_sweep(
     gross_amount: float,
     source: str = "direct",
     reference_id: str | None = None,
+    operator_id: str | None = None,
+    reasoning_trace: dict | None = None,
+    hitl_task_id: str | None = None,
 ) -> dict:
     """
     Execute a full Atomic Sweep:
     1. Calculate tax withholdings
-    2. Record the sweep in the audit ledger
+    2. Record the sweep in the audit ledger (with HITL trace if applicable)
     3. Mint BKD net amount to the merchant's wallet (if wallet configured)
     4. Return the full sweep result
 
     This is the core of the 'Zero-Click' compliance model.
+    Low-risk sweeps arrive here directly; high-value/W2G sweeps arrive here
+    only after human sign-off via hitl_gate.approve_sweep().
     """
     sweep = calculate_sweep(gross_amount)
 
@@ -84,6 +89,9 @@ async def execute_atomic_sweep(
         "reference_id": reference_id,
         "sweep_status": "completed",
         "tx_hash": tx_hash,
+        "operator_id": operator_id,
+        "reasoning_trace": reasoning_trace or {},
+        "hitl_task_id": hitl_task_id,
     }).execute()
 
     return {**sweep, "sweep_id": result.data[0]["id"], "tx_hash": tx_hash}
