@@ -1,80 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Command Center</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background: #f8f9fa; padding: 20px; }
-        .project-card { margin-bottom: 24px; }
-        .item-list { max-height: 300px; overflow-y: auto; }
-        .item { margin-bottom: 8px; padding: 8px 12px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; }
-        .item p { margin-bottom: 2px; }
-        .item-file { font-size: 0.75em; color: #888; word-break: break-all; }
-        .item-date { font-size: 0.75em; color: #aaa; }
-        .category-label { font-size: 0.8em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #555; margin-top: 12px; }
-        .last-scan { font-size: 0.8em; color: #aaa; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Command Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --gold:#c9993a;--gl:#e8c060;--gd:#7a5a1a;
+      --bg:#080808;--bg2:#0f0f0f;--bg3:#161616;--bg4:#1e1e1e;
+      --b:#2a2a2a;--b2:#333;
+      --t:#e8e4dc;--t2:#9a9690;--t3:#5a5652;
+      --g:#3ecf8e;--r:#f25a5a;--am:#e8a838;--bl:#5ab4f2
+    }
+    body{background:var(--bg);color:var(--t);font-family:'Figtree',sans-serif;font-size:14px;min-height:100vh}
+    a{color:inherit;text-decoration:none}
+
+    /* ── Header ── */
+    .hdr{padding:16px 24px 12px;border-bottom:1px solid var(--b);position:sticky;top:0;background:var(--bg);z-index:10}
+    .hdr-row{display:flex;align-items:center;justify-content:space-between}
+    .hdr-title{font-family:'Instrument Serif',serif;font-size:21px;color:var(--gl);display:flex;align-items:center;gap:9px}
+    .hdr-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pls 2s ease-in-out infinite;flex-shrink:0}
+    @keyframes pls{0%,100%{opacity:1}50%{opacity:.3}}
+    .hdr-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3);letter-spacing:.14em;text-transform:uppercase;margin-top:4px}
+    .hdr-actions{display:flex;align-items:center;gap:12px}
+    .hdr-scan{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--t3)}
+    .btn-refresh{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:6px 14px;border-radius:6px;background:var(--gold);color:var(--bg);font-weight:500;cursor:pointer;border:none;transition:opacity .2s}
+    .btn-refresh:hover{opacity:.85}
+
+    /* ── Stats bar ── */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:16px 24px}
+    .stat{background:var(--bg3);border:1px solid var(--b);border-radius:8px;padding:10px 8px;text-align:center}
+    .stat-v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:500;line-height:1}
+    .stat-l{font-size:7px;color:var(--t3);letter-spacing:.06em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-top:4px}
+
+    /* ── Layout ── */
+    .main{padding:0 24px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
+
+    /* ── Project card ── */
+    .proj-card{background:var(--bg3);border:1px solid var(--b);border-radius:10px;overflow:hidden}
+    .proj-card-hdr{padding:13px 16px;border-bottom:1px solid var(--b);display:flex;align-items:center;justify-content:space-between}
+    .proj-name{font-family:'Instrument Serif',serif;font-size:16px;color:var(--t)}
+    .proj-badge{font-family:'JetBrains Mono',monospace;font-size:8px;padding:3px 9px;border-radius:12px;background:var(--bg4);border:1px solid var(--b2);color:var(--t3);letter-spacing:.05em}
+    .proj-body{padding:14px 16px}
+
+    /* ── Category ── */
+    .cat{margin-bottom:14px}
+    .cat:last-child{margin-bottom:0}
+    .cat-hdr{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+    .cat-label{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--t3);letter-spacing:.18em;text-transform:uppercase}
+    .cat-count{font-family:'JetBrains Mono',monospace;font-size:8px;padding:1px 7px;border-radius:10px;background:var(--bg4);border:1px solid var(--b2);color:var(--t3)}
+
+    /* ── Item ── */
+    .items{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px}
+    .items::-webkit-scrollbar{width:2px}
+    .items::-webkit-scrollbar-thumb{background:var(--b2)}
+    .item{padding:9px 11px;background:var(--bg4);border:1px solid var(--b);border-radius:7px}
+    .item-content{font-size:12px;color:var(--t2);line-height:1.5;margin-bottom:4px;word-break:break-word}
+    .item-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .item-file{font-size:8px;color:var(--t3);font-family:'JetBrains Mono',monospace;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .item-date{font-size:8px;color:var(--t3);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+
+    /* ── Category color dots ── */
+    .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+    .dot-milestone{background:var(--g)}
+    .dot-task{background:var(--bl)}
+    .dot-todo{background:var(--am)}
+    .dot-build{background:var(--gold)}
+    .dot-status{background:var(--t3)}
+    .dot-open{background:var(--r)}
+    .dot-pending{background:var(--b2)}
+    .dot-iso{background:var(--gl)}
+
+    /* ── Empty state ── */
+    .empty{padding:40px 24px;text-align:center;color:var(--t3);font-family:'JetBrains Mono',monospace;font-size:11px}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <h1 class="h3 mb-0">Project Command Center</h1>
-            <div class="d-flex align-items-center gap-3">
-                {% if last_scan %}
-                <span class="last-scan">Last scanned: {{ last_scan }}</span>
-                {% endif %}
-                <a href="?refresh=1" class="btn btn-primary btn-sm">Refresh Scan</a>
-            </div>
-        </div>
 
-        {% if not projects %}
-        <div class="alert alert-info">No items found. Click <strong>Refresh Scan</strong> to scan your project folders.</div>
+  <header class="hdr">
+    <div class="hdr-row">
+      <div class="hdr-title">
+        <div class="hdr-dot"></div>
+        Project Command Center
+      </div>
+      <div class="hdr-actions">
+        {% if last_scan %}
+        <span class="hdr-scan">scanned {{ last_scan }}</span>
         {% endif %}
-
-        {% for project_name, data in projects.items() %}
-        <div class="card project-card shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h2 class="h6 mb-0">{{ project_name }}</h2>
-                {% set total = data.values() | map('length') | sum %}
-                <span class="badge bg-secondary">{{ total }} items</span>
-            </div>
-            <div class="card-body">
-                {% set categories = [
-                    ('milestones', 'Milestones', 'success'),
-                    ('tasks', 'Tasks', 'primary'),
-                    ('todos', 'To-Dos', 'warning'),
-                    ('build_notes', 'Build Notes', 'info'),
-                    ('statuses', 'Statuses', 'secondary'),
-                    ('opens', 'Open', 'danger'),
-                    ('pendings', 'Pending', 'dark'),
-                    ('iso20022s', 'Transactions (ISO 20022)', 'primary')
-                ] %}
-                {% for key, label, color in categories %}
-                {% if data[key] %}
-                <div class="category-label">
-                    <span class="badge bg-{{ color }} me-1">{{ data[key] | length }}</span>{{ label }}
-                </div>
-                <div class="item-list mb-2">
-                    {% for item in data[key] %}
-                    <div class="item">
-                        <p>{{ item.content }}</p>
-                        <div class="item-file">{{ item.file }}</div>
-                        <div class="item-date">{{ item.date }}</div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
+        <a href="?refresh=1"><button class="btn-refresh">↺ Refresh Scan</button></a>
+      </div>
     </div>
+    <div class="hdr-sub">Awittivations L.L.C. · Live Document Intelligence</div>
+  </header>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        setTimeout(function() { window.location.href = '?refresh=1'; }, 300000);
-    </script>
+  {% if projects %}
+  {% set total_items = projects.values() | map(attribute='milestones') | map('length') | list %}
+  <div class="stats">
+    {% set ns = namespace(milestones=0, tasks=0, opens=0, pendings=0) %}
+    {% for p, data in projects.items() %}
+      {% set ns.milestones = ns.milestones + data.milestones|length %}
+      {% set ns.tasks = ns.tasks + data.tasks|length + data.todos|length %}
+      {% set ns.opens = ns.opens + data.opens|length %}
+      {% set ns.pendings = ns.pendings + data.pendings|length %}
+    {% endfor %}
+    <div class="stat"><div class="stat-v" style="color:var(--g)">{{ ns.milestones }}</div><div class="stat-l">Milestones</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--bl)">{{ ns.tasks }}</div><div class="stat-l">Tasks</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--r)">{{ ns.opens }}</div><div class="stat-l">Open</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--am)">{{ ns.pendings }}</div><div class="stat-l">Pending</div></div>
+  </div>
+  {% endif %}
+
+  <div class="main">
+    {% if not projects %}
+    <div class="empty">No items found. Click <strong>Refresh Scan</strong> to scan your project folders.</div>
+    {% endif %}
+
+    {% set categories = [
+      ('milestones', 'Milestones',  'dot-milestone'),
+      ('tasks',      'Tasks',       'dot-task'),
+      ('todos',      'To-Dos',      'dot-todo'),
+      ('build_notes','Build Notes', 'dot-build'),
+      ('statuses',   'Statuses',    'dot-status'),
+      ('opens',      'Open',        'dot-open'),
+      ('pendings',   'Pending',     'dot-pending'),
+      ('iso20022s',  'ISO 20022',   'dot-iso'),
+    ] %}
+
+    {% for project_name, data in projects.items() %}
+    {% set total = data.values() | map('length') | sum %}
+    <div class="proj-card">
+      <div class="proj-card-hdr">
+        <div class="proj-name">{{ project_name }}</div>
+        <span class="proj-badge">{{ total }} items</span>
+      </div>
+      <div class="proj-body">
+        {% for key, label, dot_cls in categories %}
+        {% if data[key] %}
+        <div class="cat">
+          <div class="cat-hdr">
+            <div class="dot {{ dot_cls }}"></div>
+            <span class="cat-label">{{ label }}</span>
+            <span class="cat-count">{{ data[key]|length }}</span>
+          </div>
+          <div class="items">
+            {% for item in data[key] %}
+            <div class="item">
+              <div class="item-content">{{ item.content }}</div>
+              <div class="item-meta">
+                <span class="item-file">{{ item.file | replace('/home/jack/', '~/') }}</span>
+                <span class="item-date">{{ item.date[:10] }}</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
 </body>
 </html>
