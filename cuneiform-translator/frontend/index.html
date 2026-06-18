@@ -102,8 +102,39 @@
           <div class="pe-search-bar">
             <input type="text" id="pe-search-input" placeholder="Search tablets or enter P-number (e.g. P008001)" spellcheck="false" />
             <button id="pe-search-btn" onclick="peSearch()">Browse</button>
+            <button id="pe-select-btn" onclick="peToggleSelect()" title="Select multiple tablets for corpus analysis">Select</button>
+          </div>
+          <div id="pe-corpus-bar" class="pe-corpus-bar" hidden>
+            <span id="pe-selected-count">0 selected</span>
+            <button id="pe-corpus-btn" onclick="peCorpus()" disabled>Analyze Corpus</button>
+            <button class="pe-select-clear" onclick="peClearSelection()">Clear</button>
           </div>
           <div id="pe-results" class="cdli-results"></div>
+          <!-- Corpus results panel -->
+          <div id="pe-corpus-panel" class="pe-analysis-panel" hidden>
+            <div class="pe-analysis-header">
+              <button class="pe-back-btn" onclick="peCorpusBack()">&#8592; Back to results</button>
+              <h3 id="pe-corpus-title"></h3>
+            </div>
+            <div class="pe-corpus-body">
+              <div class="pe-stat-card">
+                <h4>Pattern Distribution</h4>
+                <div id="pe-corpus-patterns"></div>
+              </div>
+              <div class="pe-stat-card">
+                <h4>Top Signs Across Corpus</h4>
+                <div id="pe-corpus-signs"></div>
+              </div>
+              <div class="pe-stat-card">
+                <h4>Numerical Systems</h4>
+                <div id="pe-corpus-numsys"></div>
+              </div>
+              <div class="pe-stat-card pe-corpus-pairs-card">
+                <h4>Top Co-occurring Sign Pairs</h4>
+                <div id="pe-corpus-pairs"></div>
+              </div>
+            </div>
+          </div>
           <div id="pe-analysis-panel" class="pe-analysis-panel" hidden>
             <div class="pe-analysis-header">
               <button class="pe-back-btn" onclick="peBack()">&#8592; Back to results</button>

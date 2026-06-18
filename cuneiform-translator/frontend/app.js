@@ -539,11 +539,18 @@ const PE_PATTERN_LABELS = {
   unknown:      { label: "Unknown",      desc: "Pattern unclear" },
 };
 
+let peSelectMode = false;
+let peSelected = new Set();
+let peTabletCache = [];
+
 async function peSearch() {
   const q = document.getElementById("pe-search-input").value.trim();
-  const resultsEl = document.getElementById("pe-results");
+  const resultsEl  = document.getElementById("pe-results");
   const analysisEl = document.getElementById("pe-analysis-panel");
+  const corpusEl   = document.getElementById("pe-corpus-panel");
   analysisEl.hidden = true;
+  corpusEl.hidden   = true;
+  resultsEl.style.display = "";
   resultsEl.innerHTML = "<p class='cdli-loading'>Loading Proto-Elamite tablets…</p>";
 
   const params = new URLSearchParams({ limit: 16 });
@@ -552,8 +559,8 @@ async function peSearch() {
   try {
     const res = await fetch(`${API}/api/proto-elamite/search?${params}`);
     if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
-    const tablets = await res.json();
-    renderPeResults(tablets);
+    peTabletCache = await res.json();
+    renderPeResults(peTabletCache);
   } catch (e) {
     resultsEl.innerHTML = `<p class="cdli-error">Error: ${e.message}</p>`;
   }
@@ -565,8 +572,14 @@ function renderPeResults(tablets) {
     el.innerHTML = "<p class='cdli-loading'>No Proto-Elamite tablets found.</p>";
     return;
   }
-  el.innerHTML = tablets.map(t => `
-    <div class="cdli-card" onclick="peAnalyze('${t.p_number}','${escHtml(t.designation)}')">
+  el.innerHTML = tablets.map(t => {
+    const checked = peSelected.has(t.p_number);
+    const selectAttr = peSelectMode
+      ? `onclick="peToggleCard('${t.p_number}',this)" class="cdli-card pe-selectable${checked ? ' pe-selected' : ''}"`
+      : `onclick="peAnalyze('${t.p_number}','${escHtml(t.designation)}')" class="cdli-card"`;
+    return `
+    <div ${selectAttr} data-pnum="${t.p_number}">
+      ${peSelectMode ? `<div class="pe-check-box">${checked ? "&#10003;" : ""}</div>` : ""}
       <div class="cdli-card-img-wrap">
         <img src="${t.photo_url}" alt="${escHtml(t.p_number)}" loading="lazy"
              onerror="this.parentElement.innerHTML='<div class=\\'cdli-card-no-img\\'>No photo</div>'" />
@@ -577,8 +590,151 @@ function renderPeResults(tablets) {
         ${t.museum_no ? `<span class="cdli-museum">${escHtml(t.museum_no)}</span>` : ""}
         <span class="cdli-period">Proto-Elamite (ca. 3100–2900 BC)</span>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
+}
+
+function peToggleSelect() {
+  peSelectMode = !peSelectMode;
+  const btn = document.getElementById("pe-select-btn");
+  const bar = document.getElementById("pe-corpus-bar");
+  btn.classList.toggle("active", peSelectMode);
+  bar.hidden = !peSelectMode;
+  if (!peSelectMode) {
+    peSelected.clear();
+    peUpdateCorpusBtn();
+  }
+  renderPeResults(peTabletCache);
+}
+
+function peToggleCard(pnum, cardEl) {
+  if (peSelected.has(pnum)) {
+    peSelected.delete(pnum);
+    cardEl.classList.remove("pe-selected");
+    cardEl.querySelector(".pe-check-box").innerHTML = "";
+  } else {
+    peSelected.add(pnum);
+    cardEl.classList.add("pe-selected");
+    cardEl.querySelector(".pe-check-box").innerHTML = "&#10003;";
+  }
+  peUpdateCorpusBtn();
+}
+
+function peUpdateCorpusBtn() {
+  const n = peSelected.size;
+  document.getElementById("pe-selected-count").textContent = `${n} selected`;
+  const btn = document.getElementById("pe-corpus-btn");
+  btn.textContent = n >= 2 ? `Analyze Corpus (${n})` : "Analyze Corpus";
+  btn.disabled = n < 2;
+}
+
+function peClearSelection() {
+  peSelected.clear();
+  peUpdateCorpusBtn();
+  renderPeResults(peTabletCache);
+}
+
+async function peCorpus() {
+  const pNumbers = [...peSelected];
+  if (pNumbers.length < 2) return;
+
+  const resultsEl  = document.getElementById("pe-results");
+  const corpusEl   = document.getElementById("pe-corpus-panel");
+  const titleEl    = document.getElementById("pe-corpus-title");
+
+  resultsEl.style.display = "none";
+  document.getElementById("pe-analysis-panel").hidden = true;
+  corpusEl.hidden = false;
+  titleEl.textContent = `${pNumbers.length} tablets`;
+  ["pe-corpus-patterns","pe-corpus-signs","pe-corpus-numsys","pe-corpus-pairs"].forEach(
+    id => document.getElementById(id).innerHTML = "<p>Loading…</p>"
+  );
+
+  try {
+    const res = await fetch(`${API}/api/proto-elamite/corpus`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ p_numbers: pNumbers }),
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    renderCorpus(data, pNumbers.length);
+  } catch (e) {
+    document.getElementById("pe-corpus-patterns").innerHTML =
+      `<p class="cdli-error">${e.message}</p>`;
+  }
+}
+
+function renderCorpus(data, nTablets) {
+  document.getElementById("pe-corpus-title").textContent =
+    `${nTablets} tablets — ${data.n_tablets} analysed`;
+
+  // Pattern distribution
+  const patTotal = Object.values(data.pattern_dist || {}).reduce((s,v)=>s+v,0);
+  document.getElementById("pe-corpus-patterns").innerHTML =
+    Object.entries(data.pattern_dist || {}).sort((a,b)=>b[1]-a[1]).map(([pat, cnt]) => {
+      const info = PE_PATTERN_LABELS[pat] || { label: pat };
+      const pct  = Math.round(cnt / patTotal * 100);
+      return `<div class="pe-bar-row">
+        <span class="pe-bar-label">${info.label}</span>
+        <div class="pe-bar-track">
+          <div class="pe-bar-fill" style="width:${pct}%;background:#7a4a1a"></div>
+        </div>
+        <span class="pe-bar-count">${cnt} (${pct}%)</span>
+      </div>`;
+    }).join("") || "<p>No data.</p>";
+
+  // Top signs
+  const signs = data.top_signs || [];
+  const maxSig = signs.length ? signs[0][1] : 1;
+  document.getElementById("pe-corpus-signs").innerHTML = signs.slice(0,25).map(([sign, cnt]) => {
+    const pct = Math.round(cnt / maxSig * 100);
+    return `<div class="pe-bar-row">
+      <span class="pe-bar-label pe-msign-inline">${escHtml(sign)}</span>
+      <div class="pe-bar-track">
+        <div class="pe-bar-fill" style="width:${pct}%;background:#b85c2c"></div>
+      </div>
+      <span class="pe-bar-count">${cnt}</span>
+    </div>`;
+  }).join("") || "<p>No signs.</p>";
+
+  // Numerical systems
+  const sysDist = data.n_system_dist || {};
+  const sysTotal = Object.values(sysDist).reduce((s,v)=>s+v,0);
+  const nToks = data.top_n_tokens || [];
+  document.getElementById("pe-corpus-numsys").innerHTML =
+    (sysTotal === 0 ? "<p>No numerals.</p>" :
+      Object.entries(sysDist).sort((a,b)=>b[1]-a[1]).map(([sys, cnt]) => {
+        const pct = Math.round(cnt / sysTotal * 100);
+        const col = PE_SYSTEM_COLORS[sys] || PE_SYSTEM_COLORS.unknown;
+        return `<div class="pe-bar-row">
+          <span class="pe-bar-label">${sys}</span>
+          <div class="pe-bar-track">
+            <div class="pe-bar-fill" style="width:${pct}%;background:${col}"></div>
+          </div>
+          <span class="pe-bar-count">${pct}%</span>
+        </div>`;
+      }).join("")
+    ) + `<div class="pe-n-tokens">${nToks.slice(0,12).map(([t,c])=>
+      `<span class="pe-n-chip">${escHtml(t)}×${c}</span>`).join(" ")}</div>`;
+
+  // Co-occurrence pairs
+  const pairs = data.top_cooccur_pairs || [];
+  document.getElementById("pe-corpus-pairs").innerHTML = pairs.length === 0
+    ? "<p>No pairs found.</p>"
+    : `<div class="pe-pairs-grid">${pairs.map(p =>
+        `<div class="pe-pair-chip" title="${p.count} co-occurrences">
+          <span class="pe-msign-inline">${escHtml(p.signs[0])}</span>
+          <span class="pe-pair-sep">+</span>
+          <span class="pe-msign-inline">${escHtml(p.signs[1])}</span>
+          <span class="pe-pair-count">${p.count}</span>
+        </div>`
+      ).join("")}</div>`;
+}
+
+function peCorpusBack() {
+  document.getElementById("pe-corpus-panel").hidden = true;
+  document.getElementById("pe-results").style.display = "";
 }
 
 async function peAnalyze(pNumber, designation) {

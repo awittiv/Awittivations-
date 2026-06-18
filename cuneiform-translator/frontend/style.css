@@ -783,3 +783,106 @@ button#translate-btn:disabled { background: #b0a090; cursor: not-allowed; }
 .cdli-card-info strong { font-size: 0.75rem; font-family: monospace; color: var(--clay-dark); }
 .cdli-period { font-size: 0.7rem; color: #8a7a60; font-style: italic; }
 .cdli-card { cursor: pointer; }
+
+/* ── Proto-Elamite corpus view ──────────────────────────────────────────────── */
+
+#pe-select-btn {
+  padding: 0.55rem 0.9rem;
+  background: var(--surface);
+  color: var(--clay-dark);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+#pe-select-btn:hover { border-color: var(--clay); }
+#pe-select-btn.active {
+  background: var(--clay-dark);
+  color: white;
+  border-color: var(--clay-dark);
+}
+
+.pe-corpus-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background: #f5ede0;
+  border: 1px solid #d4b896;
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+#pe-selected-count { color: var(--ink-muted); flex: 1; }
+#pe-corpus-btn {
+  padding: 0.35rem 0.9rem;
+  background: var(--clay-dark);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+#pe-corpus-btn:disabled { background: #b0a090; cursor: not-allowed; }
+#pe-corpus-btn:not(:disabled):hover { background: #6b500f; }
+.pe-select-clear {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+.pe-select-clear:hover { border-color: var(--clay); color: var(--clay-dark); }
+
+/* selectable cards */
+.pe-selectable { cursor: pointer; position: relative; }
+.pe-selectable:hover { border-color: var(--clay); }
+.pe-selected { border-color: var(--clay-dark) !important; background: #f0e8d8 !important; }
+.pe-check-box {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--clay-dark);
+  background: white;
+  transition: border-color 0.15s;
+}
+.pe-selected .pe-check-box { border-color: var(--clay-dark); background: var(--clay-dark); color: white; }
+
+/* corpus body layout */
+.pe-corpus-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+@media (max-width: 720px) { .pe-corpus-body { grid-template-columns: 1fr; } }
+.pe-corpus-pairs-card { grid-column: 1 / -1; }
+
+/* co-occurrence pairs */
+.pe-pairs-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+.pe-pair-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #f0e8d8;
+  border: 1px solid #d4b896;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}
+.pe-pair-sep { color: var(--ink-muted); font-size: 0.7rem; }
+.pe-pair-count {
+  margin-left: 0.2rem;
+  background: var(--clay-dark);
+  color: white;
+  border-radius: 3px;
+  padding: 0 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
