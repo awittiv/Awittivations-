@@ -1,0 +1,100 @@
+{
+  "timestamp": "2026-06-18T12:52:14.718393Z",
+  "classifier_backbone": "efficientnet_b0",
+  "classifier_val_acc": 0.558641975308642,
+  "n_tablets": 7,
+  "match_iou": 0.5,
+  "overall": {
+    "det_recall": 0.7784,
+    "det_precision": 0.6945,
+    "clf_top1": 0.8284,
+    "clf_top3": 0.927,
+    "e2e_top1": 0.6448
+  },
+  "per_tablet": [
+    {
+      "p_number": "P335597",
+      "n_gt": 18,
+      "n_pred": 24,
+      "det_tp": 13,
+      "det_recall": 0.7222,
+      "det_precision": 0.5417,
+      "clf_top1": 0.5,
+      "clf_top3": 0.8333,
+      "clf_correct": 6,
+      "clf_total": 12
+    },
+    {
+      "p_number": "P335651",
+      "n_gt": 19,
+      "n_pred": 30,
+      "det_tp": 12,
+      "det_recall": 0.6316,
+      "det_precision": 0.4,
+      "clf_top1": 0.6,
+      "clf_top3": 0.8,
+      "clf_correct": 6,
+      "clf_total": 10
+    },
+    {
+      "p_number": "P336009",
+      "n_gt": 86,
+      "n_pred": 121,
+      "det_tp": 59,
+      "det_recall": 0.686,
+      "det_precision": 0.4876,
+      "clf_top1": 0.7018,
+      "clf_top3": 0.8421,
+      "clf_correct": 40,
+      "clf_total": 57
+    },
+    {
+      "p_number": "P334865",
+      "n_gt": 103,
+      "n_pred": 114,
+      "det_tp": 83,
+      "det_recall": 0.8058,
+      "det_precision": 0.7281,
+      "clf_top1": 0.8133,
+      "clf_top3": 0.96,
+      "clf_correct": 61,
+      "clf_total": 75
+    },
+    {
+      "p_number": "P335653",
+      "n_gt": 157,
+      "n_pred": 171,
+      "det_tp": 127,
+      "det_recall": 0.8089,
+      "det_precision": 0.7427,
+      "clf_top1": 0.8319,
+      "clf_top3": 0.916,
+      "clf_correct": 99,
+      "clf_total": 119
+    },
+    {
+      "p_number": "P334863",
+      "n_gt": 16,
+      "n_pred": 17,
+      "det_tp": 13,
+      "det_recall": 0.8125,
+      "det_precision": 0.7647,
+      "clf_top1": 0.6667,
+      "clf_top3": 0.8333,
+      "clf_correct": 8,
+      "clf_total": 12
+    },
+    {
+      "p_number": "P335949",
+      "n_gt": 296,
+      "n_pred": 302,
+      "det_tp": 234,
+      "det_recall": 0.7905,
+      "det_precision": 0.7748,
+      "clf_top1": 0.9009,
+      "clf_top3": 0.9595,
+      "clf_correct": 200,
+      "clf_total": 222
+    }
+  ]
+}

@@ -13,6 +13,7 @@ Output: per-tablet recall/precision and sign-level top-1 / top-3 accuracy.
 import argparse
 import ast
 import csv
+import datetime
 import json
 import sys
 from pathlib import Path
@@ -82,6 +83,7 @@ def main():
 
     total_det_tp = total_det_gt = total_det_pred = 0
     total_clf_top1 = total_clf_top3 = total_clf_total = 0
+    per_tablet = []
 
     for pnum in val_tablets:
         img = Image.open(TABLETS_DIR / f"{pnum}.jpg").convert("RGB")
@@ -97,6 +99,9 @@ def main():
         if not pred_boxes:
             print(f"  {pnum}: NO DETECTIONS  gt={n_gt}")
             total_det_gt += n_gt
+            per_tablet.append({"p_number": pnum, "n_gt": n_gt, "n_pred": 0,
+                                "det_recall": 0, "det_precision": 0,
+                                "clf_top1": 0, "clf_top3": 0, "clf_total": 0})
             continue
 
         pred_t = torch.tensor(pred_boxes, dtype=torch.float32)
@@ -153,6 +158,13 @@ def main():
             f"clf_top1={clf_acc1:.2f} clf_top3={clf_acc3:.2f}  "
             f"({clf_top1}/{clf_total} correct)"
         )
+        per_tablet.append({
+            "p_number": pnum, "n_gt": n_gt, "n_pred": n_pred,
+            "det_tp": det_tp, "det_recall": round(det_recall, 4),
+            "det_precision": round(det_precision, 4),
+            "clf_top1": round(clf_acc1, 4), "clf_top3": round(clf_acc3, 4),
+            "clf_correct": clf_top1, "clf_total": clf_total,
+        })
 
         total_det_tp   += det_tp
         total_det_gt   += n_gt
@@ -166,9 +178,31 @@ def main():
     det_P = total_det_tp / total_det_pred if total_det_pred else 0
     clf1  = total_clf_top1 / total_clf_total if total_clf_total else 0
     clf3  = total_clf_top3 / total_clf_total if total_clf_total else 0
+    e2e   = det_R * clf1
     print(f"Overall detector:    recall={det_R:.3f}  precision={det_P:.3f}")
     print(f"Overall classifier:  top-1={clf1:.3f}    top-3={clf3:.3f}")
-    print(f"End-to-end top-1:    {det_R * clf1:.3f}  (det_recall × clf_top1)")
+    print(f"End-to-end top-1:    {e2e:.3f}  (det_recall × clf_top1)")
+
+    # Persist results
+    model_info = json.loads((ML_DIR / "model_info.json").read_text()) if (ML_DIR / "model_info.json").exists() else {}
+    results = {
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "classifier_backbone": model_info.get("backbone", "unknown"),
+        "classifier_val_acc": model_info.get("best_val_acc"),
+        "n_tablets": len(val_tablets),
+        "match_iou": MATCH_IOU,
+        "overall": {
+            "det_recall":    round(det_R, 4),
+            "det_precision": round(det_P, 4),
+            "clf_top1":      round(clf1, 4),
+            "clf_top3":      round(clf3, 4),
+            "e2e_top1":      round(e2e, 4),
+        },
+        "per_tablet": per_tablet,
+    }
+    out_path = ML_DIR / "eval_results.json"
+    out_path.write_text(json.dumps(results, indent=2))
+    print(f"\nResults saved → {out_path}")
 
 
 if __name__ == "__main__":
