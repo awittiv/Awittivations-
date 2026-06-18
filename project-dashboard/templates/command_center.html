@@ -179,7 +179,7 @@ const MILESTONES=[
   {date:'Apr 5, 2026',title:'AI Compliance Certificate Adopted',desc:'AWIT-AIS-2026-01 formally ratified',s:'done'},
   {date:'May 7, 2026',title:'SBA 7(a) ITL Package Drafted',desc:'6 core documents complete, signatures needed',s:'done'},
   {date:'May 22, 2026',title:'Zoho DataPrep — Reactivated',desc:'Deadline passed. Account reactivated.',s:'done'},
-  {date:'Jun 21, 2026',title:'⚠ Supabase Unpause Deadline',desc:'3 DAYS LEFT — unpause or lose all CashPilot data at lgzokurllktgdldircnc',s:'urgent'},
+  {date:'Jun 18, 2026',title:'Supabase CashPilot — Restored',desc:'Unpaused Jun 18. lgzokurllktgdldircnc.supabase.co back online.',s:'done'},
   {date:'TBD',title:'SBA 7(a) ITL Lender Submission',desc:'Pending Form 1919, Form 413, tax docs',s:'future'},
   {date:'TBD',title:'Delaware C-Corp Conversion',desc:'Entity name pending, O\'Shaughnessy Fellows requirement',s:'future'},
   {date:'TBD',title:'E-Bike Nexus First Site Launch',desc:'Muskegon retail partner — triggers press release',s:'future'},
@@ -225,10 +225,10 @@ const BUILD=[
 
 // ── STATE ──
 // Completed as of Jun 18 2026:
-// t1=Zoho reactivated, t3=NSF SBIR Phase I submitted Apr 5
+// t1=Zoho reactivated, t2=Supabase unpaused Jun 18, t3=NSF SBIR Phase I submitted Apr 5
 // t6=No-tax-return explanation drafted, t10=NBFC India outreach sent
 // t11=SBA docs moved to Drive folder, t13=Bankit narrative updated to RWA
-const state={done:new Set(['t1','t3','t6','t10','t11','t13'])};
+const state={done:new Set(['t1','t2','t3','t6','t10','t11','t13'])};
 
 async function loadState(){
   try{
@@ -246,8 +246,8 @@ async function toggleTask(id){
 // ── RENDER ──
 function renderUrgent(){
   document.getElementById('urgs').innerHTML=`
-    <div class="urg crit"><div class="urg-ico">🚨</div><div><div class="urg-title">Supabase CashPilot — 3 DAYS LEFT</div><div class="urg-desc">Paused Mar 28. 90-day window ends Jun 21. Unpause NOW or lose all data at lgzokurllktgdldircnc.</div></div></div>
-    <div class="urg warn"><div class="urg-ico">📋</div><div><div class="urg-title">SBA 7(a) ITL — Lender Submission Pending</div><div class="urg-desc">Form 1919 and Form 413 are the remaining blockers. Schedule lending officer review.</div></div></div>`;
+    <div class="urg crit"><div class="urg-ico">🚨</div><div><div class="urg-title">SBA 7(a) ITL — Lender Submission Pending</div><div class="urg-desc">Form 1919 and Form 413 are the remaining blockers. Schedule lending officer review.</div></div></div>
+    <div class="urg warn"><div class="urg-ico">⚠️</div><div><div class="urg-title">Delaware C-Corp Conversion — Pending</div><div class="urg-desc">Entity name registration pending. Required for O'Shaughnessy Fellows eligibility.</div></div></div>`;
 }
 
 function renderStats(){
