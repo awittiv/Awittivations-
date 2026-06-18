@@ -406,7 +406,7 @@ function drawDetections(detections, imgNaturalW, imgNaturalH) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Cuneiform-themed palette: rotate through a few warm colours
+  // Confident signs: warm palette. Uncertain (sign ends with ?): grey dashed.
   const palette = ["#e8a020", "#d45010", "#20a870", "#6060e0", "#c03080"];
 
   detections.forEach((d, i) => {
@@ -414,21 +414,25 @@ function drawDetections(detections, imgNaturalW, imgNaturalH) {
     const y = offsetY + d.y1 * scaleY;
     const w = (d.x2 - d.x1) * scaleX;
     const h = (d.y2 - d.y1) * scaleY;
-    const color = palette[i % palette.length];
+    const uncertain = d.sign && d.sign.endsWith("?");
+    const color = uncertain ? "#888888" : palette[i % palette.length];
 
-    // Box
+    // Box — dashed for uncertain signs
+    ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = uncertain ? 1 : 1.5;
+    if (uncertain) ctx.setLineDash([3, 3]);
     ctx.strokeRect(x, y, w, h);
+    ctx.restore();
 
-    // Semi-transparent fill
-    ctx.fillStyle = color + "28";
+    // Semi-transparent fill — dimmer for uncertain
+    ctx.fillStyle = color + (uncertain ? "18" : "28");
     ctx.fillRect(x, y, w, h);
 
     // Label above box
     const label = d.sign;
     const fontSize = Math.max(9, Math.min(13, h * 0.55));
-    ctx.font = `bold ${fontSize}px monospace`;
+    ctx.font = `${uncertain ? "normal" : "bold"} ${fontSize}px monospace`;
     const textW = ctx.measureText(label).width;
     const labelX = Math.min(x, canvas.width - textW - 3);
     const labelY = y > fontSize + 2 ? y - 2 : y + h + fontSize + 1;
@@ -452,6 +456,23 @@ async function mlRecognize() {
     if (!res.ok) throw new Error((await res.json()).detail || "Recognition failed");
     const data = await res.json();
     renderResult(data, true);
+
+    // Inject confidence stats into notes
+    if (data.n_signs != null) {
+      const confPct = data.avg_clf_conf != null ? Math.round(data.avg_clf_conf * 100) : "?";
+      const uncertainNote = data.n_uncertain > 0
+        ? `${data.n_uncertain} of ${data.n_signs} signs are uncertain (marked ?) — classifier confidence below 35%.`
+        : `All ${data.n_signs} signs passed the 35% confidence threshold.`;
+      const notesList = document.getElementById("notes-list");
+      if (notesList) {
+        const li = document.createElement("li");
+        li.style.color = data.n_uncertain > data.n_signs * 0.2 ? "#8b1a1a" : "#2d5a1b";
+        li.textContent = `Automated reading: ${data.n_signs} signs detected, avg classifier confidence ${confPct}%. ${uncertainNote}`;
+        notesList.prepend(li);
+        document.getElementById("notes-box").hidden = false;
+      }
+    }
+
     // Draw bounding boxes once the image has rendered
     const img = document.getElementById("ml-image-preview");
     _lastDetections = data.detections; _lastImgW = data.image_width; _lastImgH = data.image_height;

@@ -144,12 +144,40 @@ Respond in this JSON format:
 }"""
 
 
+ML_SYSTEM_PROMPT = """You are a cuneiform scholar receiving output from an automated sign detector and classifier.
+
+STRICT RULES — zero tolerance for hallucination:
+1. Translate ONLY the exact signs provided. Do NOT add, infer, correct, or complete any sign.
+2. Signs marked with ? are uncertain readings — translate them with (?) and do not guess their true value.
+3. Do NOT use parallel texts, context, or prior knowledge to fill in signs that are missing or unclear.
+4. If the sign sequence is too fragmentary to form a coherent sentence, say so — do not manufacture meaning.
+5. Your confidence must be "low" whenever more than 20% of signs carry a ? marker.
+6. The translation must be a literal rendering of exactly what was detected, not a reconstruction.
+
+Transliteration conventions already applied:
+- CAPITALS = Sumerograms; lowercase = Akkadian syllables
+- Trailing ? = classifier confidence below 35% — treat as unverified
+- x = sign present but not recognized
+
+Respond in this JSON format:
+{
+  "language": "Sumerian | Akkadian | Unknown | Mixed",
+  "period": "brief description or null",
+  "genre": "administrative | legal | literary | royal | religious | letter | other | unknown",
+  "translation": "literal translation of detected signs only — no reconstruction",
+  "notes": ["note any limitations, uncertain signs, or fragmentary readings"],
+  "confidence": "high | medium | low",
+  "confidence_reason": "explain based on number of ? signs, total sign count, and sign sequence coherence"
+}"""
+
+
 class Detection(BaseModel):
     x1: int
     y1: int
     x2: int
     y2: int
     sign: str
+    conf: float | None = None
 
 
 class ImageTranslateResponse(BaseModel):
@@ -161,6 +189,9 @@ class ImageTranslateResponse(BaseModel):
     notes: list[str]
     confidence: str
     confidence_reason: str
+    n_signs: int | None = None
+    n_uncertain: int | None = None
+    avg_clf_conf: float | None = None
     detections: list[Detection] | None = None
     image_width: int | None = None
     image_height: int | None = None
@@ -526,21 +557,26 @@ async def ml_recognize(file: UploadFile = File(...)):
     if not transliteration or transliteration == "(no signs detected)":
         raise HTTPException(status_code=422, detail="No cuneiform signs detected in image")
 
-    # Pass ML-produced transliteration to Claude for scholarly translation
+    # Compute confidence stats for grounding Claude's response
+    n_signs = result.get("n_patches", 0)
+    n_uncertain = sum(1 for d in raw_detections if d.get("sign", "").endswith("?"))
+    avg_clf_conf = result.get("avg_clf_conf", 0.0)
+    pct_uncertain = (n_uncertain / n_signs * 100) if n_signs else 0
+
+    # Pass ML-produced transliteration to Claude with strict no-hallucination prompt
     try:
+        user_content = (
+            f"Automated sign detector found {n_signs} signs. "
+            f"{n_uncertain} ({pct_uncertain:.0f}%) are uncertain (marked ?). "
+            f"Average classifier confidence: {avg_clf_conf:.0%}.\n\n"
+            f"Transliteration (DO NOT correct, infer, or add any signs):\n\n"
+            + transliteration
+        )
         message = get_client().messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Translate this cuneiform transliteration produced by an automated sign "
-                    "classifier. The readings may contain errors — please correct obvious "
-                    "mistakes using context and parallel texts where possible:\n\n"
-                    + transliteration
-                )
-            }],
+            max_tokens=1024,
+            system=ML_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
         )
         raw = message.content[0].text.strip()
         if raw.startswith("```"):
@@ -549,8 +585,14 @@ async def ml_recognize(file: UploadFile = File(...)):
                 raw = raw[4:]
         translation_result = json.loads(raw.strip())
         translation_result["transliteration"] = transliteration
+        translation_result["n_signs"] = n_signs
+        translation_result["n_uncertain"] = n_uncertain
+        translation_result["avg_clf_conf"] = avg_clf_conf
         translation_result["detections"] = [
-            Detection(x1=d["x1"], y1=d["y1"], x2=d["x2"], y2=d["y2"], sign=d["sign"])
+            Detection(
+                x1=d["x1"], y1=d["y1"], x2=d["x2"], y2=d["y2"],
+                sign=d["sign"], conf=d.get("conf"),
+            )
             for d in raw_detections
         ]
         translation_result["image_width"] = img.width

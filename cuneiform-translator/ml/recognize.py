@@ -416,7 +416,9 @@ class CuneiformRecognizer:
         median_h = heights[len(heights) // 2]
         row_unit = max(median_h, 15)
 
-        # Classify each detected crop, collect (y_center, x1, sign, box) tuples
+        CLF_CONF_THRESHOLD = 0.35  # below this → mark sign as uncertain
+
+        # Classify each detected crop, collect (y_center, x1, sign, box, conf) tuples
         detections = []
         for x1, y1, x2, y2 in boxes:
             pad = max(2, int(min(x2 - x1, y2 - y1) * 0.1))
@@ -425,10 +427,12 @@ class CuneiformRecognizer:
             cx2 = min(img.width, x2 + pad)
             cy2 = min(img.height, y2 + pad)
             crop = img.crop((cx1, cy1, cx2, cy2))
-            cls_idx, _ = self.classify_patch(crop)
-            sign = self._netidx_to_sign.get(cls_idx, "x")
+            cls_idx, clf_conf = self.classify_patch(crop)
+            base_sign = self._netidx_to_sign.get(cls_idx, "x")
+            # Append ? to uncertain readings so Claude and users know not to trust them
+            sign = base_sign if clf_conf >= CLF_CONF_THRESHOLD else f"{base_sign}?"
             y_center = (y1 + y2) / 2
-            detections.append((y_center, x1, sign, x1, y1, x2, y2))
+            detections.append((y_center, x1, sign, x1, y1, x2, y2, clf_conf))
 
         # Greedy line clustering by y-center
         detections.sort(key=lambda t: t[0])
@@ -450,17 +454,27 @@ class CuneiformRecognizer:
 
         atf_lines = []
         det_out = []
+        all_confs = []
         for line_no, signs in enumerate(line_groups, 1):
             signs_sorted = sorted(signs, key=lambda t: t[1])  # sort by x1
             atf_lines.append(f"{line_no}. " + " ".join(t[2] for t in signs_sorted))
-            for _, _, sign, bx1, by1, bx2, by2 in signs_sorted:
-                det_out.append({"x1": bx1, "y1": by1, "x2": bx2, "y2": by2, "sign": sign})
+            for t in signs_sorted:
+                _, _, sign, bx1, by1, bx2, by2, clf_conf = t
+                det_out.append({
+                    "x1": bx1, "y1": by1, "x2": bx2, "y2": by2,
+                    "sign": sign, "conf": round(clf_conf, 3),
+                })
+                all_confs.append(clf_conf)
+
+        n_high_conf = sum(1 for c in all_confs if c >= CLF_CONF_THRESHOLD)
+        avg_conf = round(sum(all_confs) / len(all_confs), 3) if all_confs else 0.0
 
         return {
             "transliteration": "\n".join(atf_lines) if atf_lines else "(no signs detected)",
             "n_patches": len(boxes),
-            "n_high_conf": len(boxes),
-            "detector": "faster_rcnn",
+            "n_high_conf": n_high_conf,
+            "avg_clf_conf": avg_conf,
+            "detector": self._detector_type,
             "detections": det_out,
         }
 
