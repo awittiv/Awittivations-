@@ -93,6 +93,7 @@ class TabletAnalysis:
         return {
             "p_number":      self.p_number,
             "designation":   self.designation,
+            "atf":           self.atf,
             "pattern":       self.pattern,
             "n_entries":     self.n_entries,
             "n_header_signs": self.n_header_signs,

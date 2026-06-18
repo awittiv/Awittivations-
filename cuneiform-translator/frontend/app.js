@@ -592,7 +592,7 @@ async function peAnalyze(pNumber, designation) {
   const freqEl     = document.getElementById("pe-sign-freq");
   const entriesEl  = document.getElementById("pe-entries");
 
-  resultsEl.hidden   = true;
+  resultsEl.style.display = "none";
   analysisEl.hidden  = false;
   titleEl.textContent = `${pNumber} — ${designation}`;
   badgeEl.textContent = "Loading…";
@@ -710,7 +710,7 @@ function renderNTokens(tokFreq) {
 }
 
 function peBack() {
-  document.getElementById("pe-results").hidden   = false;
+  document.getElementById("pe-results").style.display = "";
   document.getElementById("pe-analysis-panel").hidden = true;
 }
 
