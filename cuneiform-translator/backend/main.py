@@ -26,6 +26,12 @@ try:
 except ImportError:
     _ML_AVAILABLE = False
 
+try:
+    from proto_elamite import parse_atf, corpus_summary
+    _PE_AVAILABLE = True
+except ImportError:
+    _PE_AVAILABLE = False
+
 app = FastAPI(title="Cuneiform Translator")
 
 app.add_middleware(
@@ -356,8 +362,7 @@ async def cdli_search(
         if not (p.startswith("P") and p[1:].isdigit()):
             raise HTTPException(status_code=400, detail="Invalid P-number (e.g. P106294)")
         try:
-            raw = _cdli_get(f"https://cdli.earth/api/artifacts/{p}")
-            artifact = json.loads(raw)
+            artifact = _cdli_by_pnumber(p)
             return [_clean_artifact(artifact)]
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -602,6 +607,129 @@ async def ml_recognize(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Model returned malformed response")
     except anthropic.APIError as e:
         raise HTTPException(status_code=502, detail=f"API error: {str(e)}")
+
+
+# ------------------------------------------------------------------
+# Proto-Elamite structural analysis endpoints
+# ------------------------------------------------------------------
+
+class ProtoElamiteSearchResult(BaseModel):
+    p_number:    str
+    designation: str
+    museum_no:   str
+    period:      str
+    genres:      list[str]
+    languages:   list[str]
+    collections: list[str]
+    photo_url:   str
+    atf:         str
+
+
+@app.get("/api/proto-elamite/search", response_model=list[ProtoElamiteSearchResult])
+async def pe_search(
+    limit: int = Query(12, ge=1, le=50),
+    q:     str = Query(None, description="Free text / P-number"),
+):
+    """Return Proto-Elamite tablets from CDLI (period=proto-elamite)."""
+    if q and q.upper().startswith("P") and q[1:].isdigit():
+        p = q.upper().strip()
+        try:
+            artifact = _cdli_by_pnumber(p)
+            return [_clean_artifact(artifact)]
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise HTTPException(status_code=404, detail=f"{p} not found in CDLI")
+            raise HTTPException(status_code=502, detail=f"CDLI error: {e}")
+        except (urllib.error.URLError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+
+    params = f"&limit={limit}&period=proto-elamite"
+    if q:
+        params += f"&designation={urllib.parse.quote(q)}"
+    try:
+        raw = _cdli_get(f"{CDLI_BASE}{params}")
+        artifacts = json.loads(raw)
+    except urllib.error.URLError as e:
+        raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail="CDLI returned unexpected response")
+
+    return [_clean_artifact(a) for a in artifacts]
+
+
+def _cdli_by_pnumber(p: str) -> dict:
+    """Fetch a single artifact by P-number using id= search."""
+    art_id = int(p[1:])  # P008001 → 8001
+    raw = _cdli_get(f"{CDLI_BASE}&id={art_id}&limit=1")
+    results = json.loads(raw)
+    if not results:
+        raise urllib.error.HTTPError(None, 404, f"{p} not found", {}, None)
+    return results[0]
+
+
+@app.get("/api/proto-elamite/analyze/{p_number}")
+async def pe_analyze(p_number: str):
+    """
+    Parse ATF for a CDLI Proto-Elamite tablet and return structural analysis:
+    sign frequencies, numerical system breakdown, administrative pattern, etc.
+    """
+    p = p_number.upper().strip()
+    if not (p.startswith("P") and p[1:].isdigit()):
+        raise HTTPException(status_code=400, detail="Invalid P-number (e.g. P008001)")
+
+    try:
+        artifact = _cdli_by_pnumber(p)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise HTTPException(status_code=404, detail=f"{p} not found in CDLI")
+        raise HTTPException(status_code=502, detail=f"CDLI error: {e}")
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=502, detail=f"CDLI unreachable: {e}")
+
+    cleaned = _clean_artifact(artifact)
+    atf = cleaned.get("atf", "")
+    if not atf:
+        raise HTTPException(status_code=422, detail=f"{p} has no ATF inscription in CDLI")
+
+    if not _PE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Proto-Elamite analyzer not available")
+
+    analysis = parse_atf(p, cleaned["designation"], atf)
+    return analysis.to_dict()
+
+
+@app.post("/api/proto-elamite/corpus")
+async def pe_corpus(body: dict):
+    """
+    Accept a list of P-numbers, fetch ATF for each, and return corpus-level stats.
+    Body: {"p_numbers": ["P008001", "P008002", ...]}
+    """
+    if not _PE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Proto-Elamite analyzer not available")
+
+    p_numbers: list[str] = body.get("p_numbers", [])
+    if not p_numbers or len(p_numbers) > 30:
+        raise HTTPException(status_code=400, detail="Provide 1-30 P-numbers")
+
+    analyses = []
+    errors   = []
+    for pn in p_numbers:
+        p = pn.upper().strip()
+        try:
+            artifact = _cdli_by_pnumber(p)
+            cleaned  = _clean_artifact(artifact)
+            atf      = cleaned.get("atf", "")
+            if atf:
+                analyses.append(parse_atf(p, cleaned["designation"], atf))
+            else:
+                errors.append(f"{p}: no ATF")
+        except Exception as e:
+            errors.append(f"{p}: {e}")
+
+    if not analyses:
+        raise HTTPException(status_code=422, detail=f"No usable ATF found. Errors: {errors}")
+
+    return {**corpus_summary(analyses), "errors": errors}
 
 
 # Serve frontend

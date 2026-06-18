@@ -22,6 +22,7 @@
           <button class="tab" id="tab-image" onclick="switchTab('image')">Tablet Photo</button>
           <button class="tab" id="tab-cdli" onclick="switchTab('cdli')">Browse CDLI</button>
           <button class="tab" id="tab-ml" onclick="switchTab('ml')">Sign Detector</button>
+          <button class="tab" id="tab-pe" onclick="switchTab('pe')">Proto-Elamite</button>
         </div>
 
         <!-- Text input panel -->
@@ -94,6 +95,46 @@
           <button id="ml-translate-btn" onclick="mlRecognize()" style="margin-top:0.75rem;width:100%;padding:0.8rem;background:var(--clay-dark);color:white;border:none;border-radius:var(--radius);font-size:1rem;font-family:inherit;cursor:pointer;">
             Run Sign Detector + Translate
           </button>
+        </div>
+
+        <!-- Proto-Elamite structural analysis panel -->
+        <div id="panel-pe" hidden>
+          <div class="pe-search-bar">
+            <input type="text" id="pe-search-input" placeholder="Search tablets or enter P-number (e.g. P008001)" spellcheck="false" />
+            <button id="pe-search-btn" onclick="peSearch()">Browse</button>
+          </div>
+          <div id="pe-results" class="cdli-results"></div>
+          <div id="pe-analysis-panel" class="pe-analysis-panel" hidden>
+            <div class="pe-analysis-header">
+              <button class="pe-back-btn" onclick="peBack()">&#8592; Back to results</button>
+              <h3 id="pe-analysis-title"></h3>
+              <span class="pe-pattern-badge" id="pe-pattern-badge"></span>
+            </div>
+            <div class="pe-analysis-body">
+              <div class="pe-atf-col">
+                <h4>ATF Inscription</h4>
+                <pre id="pe-atf-text" class="pe-atf"></pre>
+              </div>
+              <div class="pe-stats-col">
+                <div class="pe-stat-card">
+                  <h4>Administrative Structure</h4>
+                  <div id="pe-struct-summary"></div>
+                </div>
+                <div class="pe-stat-card">
+                  <h4>Numerical Systems Used</h4>
+                  <div id="pe-num-systems"></div>
+                </div>
+                <div class="pe-stat-card">
+                  <h4>Top Signs (frequency)</h4>
+                  <div id="pe-sign-freq"></div>
+                </div>
+                <div class="pe-stat-card">
+                  <h4>Entry Table</h4>
+                  <div id="pe-entries"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <button id="translate-btn" onclick="submitTranslation()">Translate</button>

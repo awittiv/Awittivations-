@@ -11,13 +11,16 @@ function switchTab(tab) {
   document.getElementById("panel-image").hidden = tab !== "image";
   document.getElementById("panel-cdli").hidden  = tab !== "cdli";
   document.getElementById("panel-ml").hidden    = tab !== "ml";
+  document.getElementById("panel-pe").hidden    = tab !== "pe";
   document.getElementById("tab-text").classList.toggle("active",  tab === "text");
   document.getElementById("tab-image").classList.toggle("active", tab === "image");
   document.getElementById("tab-cdli").classList.toggle("active",  tab === "cdli");
   document.getElementById("tab-ml").classList.toggle("active",    tab === "ml");
-  document.getElementById("translate-btn").hidden = tab === "cdli" || tab === "ml";
+  document.getElementById("tab-pe").classList.toggle("active",    tab === "pe");
+  document.getElementById("translate-btn").hidden = tab === "cdli" || tab === "ml" || tab === "pe";
   hideResult();
   if (tab === "ml") loadMlStatus();
+  if (tab === "pe") peSearch();
 }
 
 // ── Image drop zone ──────────────────────────────────────────────────────────
@@ -502,6 +505,9 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("cdli-pnum-input").addEventListener("keydown", e => {
     if (e.key === "Enter") cdliLookup();
   });
+  document.getElementById("pe-search-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") peSearch();
+  });
   loadCDLIFilters();
 
   // ML tab drop zone
@@ -515,3 +521,199 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   mlInput.addEventListener("change", () => { if (mlInput.files[0]) setMlImage(mlInput.files[0]); });
 });
+
+// ── Proto-Elamite structural analysis ────────────────────────────────────────
+
+const PE_SYSTEM_COLORS = {
+  counting: "#c27b2c",
+  grain:    "#5a8a3c",
+  area:     "#4a7ab5",
+  "time?":  "#8a5ab5",
+  unknown:  "#888",
+};
+
+const PE_PATTERN_LABELS = {
+  ledger:       { label: "Ledger",       desc: "Each row records a different commodity" },
+  "ration-list":{ label: "Ration List",  desc: "Repeated commodity, varying quantities" },
+  list:         { label: "List",         desc: "Short list of entries" },
+  unknown:      { label: "Unknown",      desc: "Pattern unclear" },
+};
+
+async function peSearch() {
+  const q = document.getElementById("pe-search-input").value.trim();
+  const resultsEl = document.getElementById("pe-results");
+  const analysisEl = document.getElementById("pe-analysis-panel");
+  analysisEl.hidden = true;
+  resultsEl.innerHTML = "<p class='cdli-loading'>Loading Proto-Elamite tablets…</p>";
+
+  const params = new URLSearchParams({ limit: 16 });
+  if (q) params.set("q", q);
+
+  try {
+    const res = await fetch(`${API}/api/proto-elamite/search?${params}`);
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const tablets = await res.json();
+    renderPeResults(tablets);
+  } catch (e) {
+    resultsEl.innerHTML = `<p class="cdli-error">Error: ${e.message}</p>`;
+  }
+}
+
+function renderPeResults(tablets) {
+  const el = document.getElementById("pe-results");
+  if (!tablets.length) {
+    el.innerHTML = "<p class='cdli-loading'>No Proto-Elamite tablets found.</p>";
+    return;
+  }
+  el.innerHTML = tablets.map(t => `
+    <div class="cdli-card" onclick="peAnalyze('${t.p_number}','${escHtml(t.designation)}')">
+      <div class="cdli-card-img-wrap">
+        <img src="${t.photo_url}" alt="${escHtml(t.p_number)}" loading="lazy"
+             onerror="this.parentElement.innerHTML='<div class=\\'cdli-card-no-img\\'>No photo</div>'" />
+      </div>
+      <div class="cdli-card-info">
+        <strong>${escHtml(t.p_number)}</strong>
+        <span class="cdli-designation">${escHtml(t.designation)}</span>
+        ${t.museum_no ? `<span class="cdli-museum">${escHtml(t.museum_no)}</span>` : ""}
+        <span class="cdli-period">Proto-Elamite (ca. 3100–2900 BC)</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function peAnalyze(pNumber, designation) {
+  const resultsEl  = document.getElementById("pe-results");
+  const analysisEl = document.getElementById("pe-analysis-panel");
+  const titleEl    = document.getElementById("pe-analysis-title");
+  const badgeEl    = document.getElementById("pe-pattern-badge");
+  const atfEl      = document.getElementById("pe-atf-text");
+  const structEl   = document.getElementById("pe-struct-summary");
+  const numEl      = document.getElementById("pe-num-systems");
+  const freqEl     = document.getElementById("pe-sign-freq");
+  const entriesEl  = document.getElementById("pe-entries");
+
+  resultsEl.hidden   = true;
+  analysisEl.hidden  = false;
+  titleEl.textContent = `${pNumber} — ${designation}`;
+  badgeEl.textContent = "Loading…";
+  atfEl.textContent   = "";
+  structEl.innerHTML = numEl.innerHTML = freqEl.innerHTML = entriesEl.innerHTML = "<p>Loading…</p>";
+
+  try {
+    const res = await fetch(`${API}/api/proto-elamite/analyze/${pNumber}`);
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const a = await res.json();
+    renderPeAnalysis(a);
+  } catch (e) {
+    badgeEl.textContent = "Error";
+    structEl.innerHTML = `<p class="cdli-error">${e.message}</p>`;
+  }
+}
+
+function renderPeAnalysis(a) {
+  const pat = PE_PATTERN_LABELS[a.pattern] || PE_PATTERN_LABELS.unknown;
+  document.getElementById("pe-pattern-badge").textContent = pat.label;
+  document.getElementById("pe-pattern-badge").title = pat.desc;
+
+  // ATF with sign highlighting
+  const highlighted = a.atf
+    .split("\n")
+    .map(line => {
+      const esc = escHtml(line);
+      // highlight M-signs in terracotta
+      return esc.replace(/(M\d+(?:[~@][a-z0-9]+)?|\|M[^|]+\|)/g,
+        '<span class="pe-msign">$1</span>');
+    })
+    .join("\n");
+  document.getElementById("pe-atf-text").innerHTML = highlighted;
+
+  // Structure summary
+  document.getElementById("pe-struct-summary").innerHTML = `
+    <table class="pe-stat-table">
+      <tr><td>Pattern</td><td><strong>${pat.label}</strong> — ${pat.desc}</td></tr>
+      <tr><td>Data entries</td><td>${a.n_entries}</td></tr>
+      <tr><td>Header signs</td><td>${a.n_header_signs}</td></tr>
+      <tr><td>Declared totals</td><td>${a.declared_totals.length}</td></tr>
+      <tr><td>Unique signs</td><td>${Object.keys(a.sign_freq).length}</td></tr>
+    </table>
+    ${a.declared_totals.length ? renderDeclaredTotals(a.declared_totals) : ""}
+  `;
+
+  // Numerical systems
+  const sysDist = a.n_system_dist || a.n_system_freq || {};
+  const sysTotal = Object.values(sysDist).reduce((s, v) => s + v, 0);
+  document.getElementById("pe-num-systems").innerHTML = sysTotal === 0
+    ? "<p>No numerals found.</p>"
+    : Object.entries(sysDist).sort((x, y) => y[1] - x[1]).map(([sys, cnt]) => {
+        const pct = Math.round(cnt / sysTotal * 100);
+        const col = PE_SYSTEM_COLORS[sys] || PE_SYSTEM_COLORS.unknown;
+        return `
+          <div class="pe-bar-row">
+            <span class="pe-bar-label">${sys}</span>
+            <div class="pe-bar-track">
+              <div class="pe-bar-fill" style="width:${pct}%;background:${col}"></div>
+            </div>
+            <span class="pe-bar-count">${pct}%</span>
+          </div>`;
+      }).join("") + `<div class="pe-n-tokens">${renderNTokens(a.top_n_tokens || a.n_token_freq)}</div>`;
+
+  // Sign frequency bars
+  const signFreq = Array.isArray(a.sign_freq) ? a.sign_freq : Object.entries(a.sign_freq).sort((x,y)=>y[1]-x[1]);
+  const maxFreq = signFreq.length ? signFreq[0][1] : 1;
+  document.getElementById("pe-sign-freq").innerHTML = signFreq.slice(0, 15).map(([sign, cnt]) => {
+    const pct = Math.round(cnt / maxFreq * 100);
+    return `
+      <div class="pe-bar-row">
+        <span class="pe-bar-label pe-msign-inline">${escHtml(sign)}</span>
+        <div class="pe-bar-track">
+          <div class="pe-bar-fill" style="width:${pct}%;background:#b85c2c"></div>
+        </div>
+        <span class="pe-bar-count">${cnt}</span>
+      </div>`;
+  }).join("") || "<p>No signs.</p>";
+
+  // Entry table
+  const entries = (a.entries || []).filter(e => !e.is_header && e.numerals.length);
+  document.getElementById("pe-entries").innerHTML = entries.length === 0
+    ? "<p>No data entries found.</p>"
+    : `<table class="pe-entry-table">
+        <thead><tr><th>Line</th><th>Surface</th><th>Signs</th><th>Quantities</th></tr></thead>
+        <tbody>
+          ${entries.map(e => `
+            <tr class="${e.is_total ? 'pe-total-row' : ''}">
+              <td>${e.line_no}${e.is_total ? " ∑" : ""}</td>
+              <td>${e.surface}</td>
+              <td>${e.signs.map(s => `<span class="pe-msign-inline">${escHtml(s)}</span>`).join(" ")}</td>
+              <td>${e.numerals.map(n => `${n.count}(${escHtml(n.token)})`).join(" ")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`;
+}
+
+function renderDeclaredTotals(totals) {
+  return `<div class="pe-totals">
+    <strong>Declared totals:</strong>
+    ${totals.map(t =>
+      `<span class="pe-total-chip">${t.numerals.map(n=>`${n.count}(${n.token})`).join(" ")}</span>`
+    ).join(" ")}
+  </div>`;
+}
+
+function renderNTokens(tokFreq) {
+  const arr = Array.isArray(tokFreq)
+    ? tokFreq
+    : Object.entries(tokFreq).sort((a,b)=>b[1]-a[1]);
+  return arr.slice(0,10).map(([tok, cnt]) =>
+    `<span class="pe-n-chip" title="${tok}">${tok}×${cnt}</span>`
+  ).join(" ");
+}
+
+function peBack() {
+  document.getElementById("pe-results").hidden   = false;
+  document.getElementById("pe-analysis-panel").hidden = true;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
