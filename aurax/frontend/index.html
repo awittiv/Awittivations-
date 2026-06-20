@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AuraX — DeFi Yield Intel · Aave v3 Polygon</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d0d; color: #e0e0e0; font-family: 'Courier New', monospace; padding: 24px; }
+    h1 { color: #7c3aed; font-size: 1.4rem; margin-bottom: 8px; }
+    .subtitle { color: #6b7280; font-size: 0.8rem; margin-bottom: 32px; }
+
+    .panel { background: #111; border: 1px solid #222; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+    .panel h2 { font-size: 0.95rem; color: #a78bfa; margin-bottom: 16px; }
+
+    /* NL Query */
+    .query-row { display: flex; gap: 8px; }
+    #nl-input {
+      flex: 1; background: #1a1a1a; border: 1px solid #333; color: #e0e0e0;
+      padding: 10px 14px; border-radius: 6px; font-family: inherit; font-size: 0.85rem;
+    }
+    button {
+      background: #7c3aed; color: white; border: none; padding: 10px 20px;
+      border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 0.85rem;
+    }
+    button:hover { background: #6d28d9; }
+    button:disabled { background: #4b2d8a; cursor: not-allowed; }
+
+    #sql-output {
+      margin-top: 12px; background: #0a0a0a; border: 1px solid #1f1f1f;
+      padding: 12px; border-radius: 4px; font-size: 0.75rem; color: #86efac;
+      white-space: pre-wrap; display: none;
+    }
+    #summary-output {
+      margin-top: 10px; font-size: 0.82rem; color: #d1d5db; line-height: 1.5; display: none;
+    }
+
+    /* Yield table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th { text-align: left; color: #6b7280; font-weight: normal; padding: 6px 10px; border-bottom: 1px solid #1f1f1f; }
+    td { padding: 8px 10px; border-bottom: 1px solid #161616; }
+    tr:hover td { background: #161616; }
+    .apy-high { color: #4ade80; }
+    .apy-mid  { color: #facc15; }
+    .apy-low  { color: #9ca3af; }
+    .frozen-badge { color: #ef4444; font-size: 0.7rem; margin-left: 4px; }
+
+    .loading { color: #6b7280; font-size: 0.8rem; }
+    .error   { color: #ef4444; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+
+<h1>AuraX</h1>
+<p class="subtitle">DeFi Yield Intelligence · Aave v3 · Polygon · Powered by Claude + Polygon RPC</p>
+
+<!-- NL Query Panel -->
+<div class="panel">
+  <h2>Ask anything about Aave v3 Polygon</h2>
+  <div class="query-row">
+    <input id="nl-input" type="text" placeholder='e.g. "Show pools with APY > 5% and utilization under 80%"' />
+    <button id="ask-btn" onclick="runQuery()">Ask</button>
+  </div>
+  <pre id="sql-output"></pre>
+  <div id="summary-output"></div>
+</div>
+
+<!-- Live Yields Panel -->
+<div class="panel">
+  <h2>Top Yields — Risk Adjusted (utilization &lt; 85%)</h2>
+  <div id="yields-table"><p class="loading">Loading...</p></div>
+</div>
+
+<script>
+  const API = 'http://localhost:8001';
+
+  async function loadYields() {
+    try {
+      const res = await fetch(`${API}/yields/risk-adjusted`);
+      const pools = await res.json();
+      const tbody = pools.map(p => {
+        const apy = p.deposit_apy_pct;
+        const cls = apy >= 5 ? 'apy-high' : apy >= 2 ? 'apy-mid' : 'apy-low';
+        const frozen = p.is_frozen ? '<span class="frozen-badge">FROZEN</span>' : '';
+        return `<tr>
+          <td>${p.symbol}${frozen}</td>
+          <td class="${cls}">${apy.toFixed(2)}%</td>
+          <td>${p.variable_borrow_apy_pct.toFixed(2)}%</td>
+          <td>${(p.utilization_rate * 100).toFixed(1)}%</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('yields-table').innerHTML = `
+        <table>
+          <thead><tr><th>Asset</th><th>Deposit APY</th><th>Borrow APY</th><th>Utilization</th></tr></thead>
+          <tbody>${tbody}</tbody>
+        </table>`;
+    } catch (e) {
+      document.getElementById('yields-table').innerHTML = `<p class="error">Failed to load: ${e.message}</p>`;
+    }
+  }
+
+  async function runQuery() {
+    const q = document.getElementById('nl-input').value.trim();
+    if (!q) return;
+    const btn = document.getElementById('ask-btn');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+
+    const sqlEl = document.getElementById('sql-output');
+    const sumEl = document.getElementById('summary-output');
+    sqlEl.style.display = 'none';
+    sumEl.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API}/query/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const data = await res.json();
+      sqlEl.textContent = data.sql;
+      sqlEl.style.display = 'block';
+      sumEl.textContent = data.summary;
+      sumEl.style.display = 'block';
+    } catch (e) {
+      sqlEl.textContent = `Error: ${e.message}`;
+      sqlEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ask';
+    }
+  }
+
+  document.getElementById('nl-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runQuery();
+  });
+
+  loadYields();
+</script>
+</body>
+</html>
