@@ -1,8 +1,9 @@
--- AuraX — Aave v3 Polygon schema (SQLite-compatible)
+-- AuraX — Aave v3 multi-chain schema (SQLite-compatible)
 -- Column names match the Claude NL-to-SQL prompt exactly
 
 CREATE TABLE IF NOT EXISTS reserves (
-    reserve_id            TEXT PRIMARY KEY,
+    reserve_id            TEXT NOT NULL,
+    chain                 TEXT NOT NULL DEFAULT 'polygon',
     symbol                TEXT NOT NULL,
     name                  TEXT,
     decimals              INTEGER,
@@ -17,12 +18,14 @@ CREATE TABLE IF NOT EXISTS reserves (
     tvl_usd               REAL,
     is_active             INTEGER DEFAULT 1,
     is_frozen             INTEGER DEFAULT 0,
-    updated_at            TEXT DEFAULT (datetime('now'))
+    updated_at            TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (reserve_id, chain)
 );
 
 CREATE TABLE IF NOT EXISTS reserve_history (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     reserve_id            TEXT NOT NULL,
+    chain                 TEXT NOT NULL DEFAULT 'polygon',
     symbol                TEXT NOT NULL,
     liquidity_rate        REAL,
     variable_borrow_rate  REAL,

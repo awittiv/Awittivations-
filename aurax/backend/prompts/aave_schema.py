@@ -5,9 +5,10 @@ SQLite notes: booleans are 1/0 not true/false; use datetime('now') not NOW(); no
 
 === DATABASE SCHEMA ===
 
-TABLE: reserves  -- current state of each Aave v3 pool (one row per asset)
-  reserve_id        VARCHAR   -- asset contract address (primary key)
-  symbol            VARCHAR   -- e.g. 'USDC', 'WETH', 'WMATIC', 'WBTC'
+TABLE: reserves  -- current state of each Aave v3 pool (one row per asset per chain)
+  reserve_id        VARCHAR   -- asset contract address
+  chain             VARCHAR   -- 'polygon' or 'arbitrum'
+  symbol            VARCHAR   -- e.g. 'USDC', 'WETH', 'WMATIC', 'WBTC', 'ARB'
   name              VARCHAR
   decimals          INTEGER
   liquidity_rate    NUMERIC   -- deposit APY in ray units; divide by 1e25 to get %
@@ -25,6 +26,7 @@ TABLE: reserves  -- current state of each Aave v3 pool (one row per asset)
 
 TABLE: reserve_history  -- hourly snapshots per reserve
   reserve_id        VARCHAR
+  chain             VARCHAR
   symbol            VARCHAR
   liquidity_rate    NUMERIC   -- ray units
   variable_borrow_rate NUMERIC
