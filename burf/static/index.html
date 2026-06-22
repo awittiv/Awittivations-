@@ -3,101 +3,111 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Burf — Personal AI</title>
+  <title>Burf</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <!-- Markdown + Code highlighting -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 </head>
 <body>
   <div id="app">
-    <!-- Sidebar -->
+
+    <!-- ── Sidebar ── -->
     <aside id="sidebar">
-      <div class="sidebar-header">
+      <div class="sidebar-top">
         <div class="logo">
-          <span class="logo-icon">B</span>
-          <span class="logo-text">Burf</span>
+          <div class="logo-mark">B</div>
+          <span class="logo-name">Burf</span>
         </div>
-        <button id="new-chat-btn" class="new-chat-btn" title="New Chat">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        <button id="new-chat-btn" class="icon-btn" title="New chat">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 5v14M5 12h14"/>
           </svg>
         </button>
       </div>
 
-      <div class="sidebar-section-label">Conversations</div>
+      <div class="sidebar-search">
+        <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input id="search-input" type="text" placeholder="Search conversations…" />
+      </div>
+
       <div id="conv-list" class="conv-list"></div>
 
       <div class="sidebar-footer">
-        <div class="user-chip">
-          <div class="user-avatar">J</div>
-          <span>Jack Wittiv</span>
+        <div class="user-row">
+          <div class="user-ava">J</div>
+          <div class="user-info">
+            <div class="user-name">Jack Wittiv</div>
+            <div class="user-sub">Awittivations LLC</div>
+          </div>
         </div>
       </div>
     </aside>
 
-    <!-- Main -->
+    <!-- ── Main ── -->
     <main id="main">
-      <!-- Welcome screen -->
-      <div id="welcome" class="welcome-screen">
-        <div class="welcome-logo">
-          <div class="welcome-logo-icon">B</div>
-          <h1>Burf</h1>
-          <p>Your personal AI — sharp, fast, and built for you.</p>
-        </div>
-        <div class="suggestion-grid">
-          <button class="suggestion-card" data-msg="Give me a status overview of my Awittivations portfolio — BANKIT, AuraX, and the CDFI application.">
-            <span class="suggestion-icon">🏢</span>
-            <span>Awittivations portfolio status</span>
-          </button>
-          <button class="suggestion-card" data-msg="Help me write a cold outreach email to a CDFI about the Financial Assistance award application.">
-            <span class="suggestion-icon">✉️</span>
-            <span>CDFI outreach email</span>
-          </button>
-          <button class="suggestion-card" data-msg="Review the AuraX DeFi yield intelligence concept and suggest improvements.">
-            <span class="suggestion-icon">📈</span>
-            <span>AuraX strategy review</span>
-          </button>
-          <button class="suggestion-card" data-msg="What are the best next steps to get BANKIT from MVP to first paying users?">
-            <span class="suggestion-icon">🚀</span>
-            <span>BANKIT go-to-market</span>
-          </button>
+
+      <!-- Welcome -->
+      <div id="welcome" class="welcome">
+        <div class="welcome-inner">
+          <div class="welcome-glow"></div>
+          <div class="welcome-mark">B</div>
+          <h1 class="welcome-title">Good to see you, Jack.</h1>
+          <p class="welcome-sub">What are we working on today?</p>
+          <div class="cards">
+            <button class="card" data-msg="Give me a status overview of my Awittivations portfolio — BANKIT, AuraX, and the CDFI application.">
+              <span class="card-icon">🏢</span>
+              <span class="card-label">Portfolio status</span>
+              <span class="card-desc">BANKIT · AuraX · CDFI</span>
+            </button>
+            <button class="card" data-msg="Help me write a cold outreach email to a CDFI about the Financial Assistance award application.">
+              <span class="card-icon">✉️</span>
+              <span class="card-label">CDFI outreach email</span>
+              <span class="card-desc">Financial Assistance award</span>
+            </button>
+            <button class="card" data-msg="Review the AuraX DeFi yield intelligence concept and suggest improvements to the product strategy.">
+              <span class="card-icon">📈</span>
+              <span class="card-label">AuraX strategy</span>
+              <span class="card-desc">DeFi yield intelligence</span>
+            </button>
+            <button class="card" data-msg="What are the best next steps to get BANKIT from MVP to first paying users in the Indian market?">
+              <span class="card-icon">🚀</span>
+              <span class="card-label">BANKIT go-to-market</span>
+              <span class="card-desc">MVP → first users</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Chat area -->
+      <!-- Chat -->
       <div id="chat-area" class="chat-area hidden">
-        <div id="chat-header" class="chat-header">
-          <span id="chat-title">Chat</span>
-          <button id="delete-conv-btn" class="icon-btn" title="Delete conversation">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-            </svg>
-          </button>
-        </div>
         <div id="messages" class="messages"></div>
       </div>
 
-      <!-- Input area -->
-      <div id="input-area" class="input-area">
+      <!-- Input -->
+      <div id="input-wrap" class="input-wrap">
         <div class="input-box">
-          <textarea
-            id="user-input"
-            placeholder="Ask Burf anything..."
-            rows="1"
-            maxlength="10000"
-          ></textarea>
-          <button id="send-btn" class="send-btn" disabled>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
+          <textarea id="user-input" placeholder="Message Burf…" rows="1" maxlength="10000"></textarea>
+          <div class="input-actions">
+            <button id="stop-btn" class="stop-btn hidden" title="Stop">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+              </svg>
+            </button>
+            <button id="send-btn" class="send-btn" disabled title="Send (Enter)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="input-hint">Burf · claude-sonnet-4-6 · Enter to send, Shift+Enter for newline</div>
+        <div class="input-hint">claude-sonnet-4-6 &nbsp;·&nbsp; Enter to send &nbsp;·&nbsp; Shift+Enter for newline</div>
       </div>
+
     </main>
   </div>
 

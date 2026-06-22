@@ -1,56 +1,68 @@
-/* ──────────────────────────────────────────────────────────
-   Burf — frontend logic
-   ────────────────────────────────────────────────────────── */
+/* ── Marked config ── */
+const renderer = new marked.Renderer();
 
-marked.setOptions({
-  highlight: (code, lang) => {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value;
-    }
-    return hljs.highlightAuto(code).value;
-  },
-  breaks: true,
-  gfm: true,
-});
+renderer.code = (code, lang) => {
+  const validLang = lang && hljs.getLanguage(lang) ? lang : '';
+  const highlighted = validLang
+    ? hljs.highlight(code, { language: validLang }).value
+    : hljs.highlightAuto(code).value;
+  const label = lang || 'code';
+  return `
+    <div class="code-block">
+      <div class="code-block-header">
+        <span class="code-lang">${label}</span>
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code>${highlighted}</code></pre>
+    </div>`;
+};
+
+marked.setOptions({ renderer, breaks: true, gfm: true });
 
 /* ── State ── */
 let activeConvId = null;
-let isStreaming = false;
+let isStreaming  = false;
+let stopRequested = false;
+let allConvs     = [];
 
-/* ── DOM refs ── */
+/* ── DOM ── */
 const welcome    = document.getElementById('welcome');
 const chatArea   = document.getElementById('chat-area');
-const messages   = document.getElementById('messages');
-const chatTitle  = document.getElementById('chat-title');
+const messagesEl = document.getElementById('messages');
 const convList   = document.getElementById('conv-list');
 const userInput  = document.getElementById('user-input');
 const sendBtn    = document.getElementById('send-btn');
+const stopBtn    = document.getElementById('stop-btn');
 const newChatBtn = document.getElementById('new-chat-btn');
-const delConvBtn = document.getElementById('delete-conv-btn');
+const searchInput= document.getElementById('search-input');
 
 /* ── Boot ── */
 loadConversations();
+userInput.focus();
 
-/* ── Input auto-resize + enable send ── */
+/* ── Input ── */
 userInput.addEventListener('input', () => {
   userInput.style.height = 'auto';
-  userInput.style.height = Math.min(userInput.scrollHeight, 160) + 'px';
+  userInput.style.height = Math.min(userInput.scrollHeight, 180) + 'px';
   sendBtn.disabled = !userInput.value.trim() || isStreaming;
 });
 
-userInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) send();
-  }
+userInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) send(); }
 });
 
 sendBtn.addEventListener('click', send);
+stopBtn.addEventListener('click', () => { stopRequested = true; });
 newChatBtn.addEventListener('click', startNewChat);
-delConvBtn.addEventListener('click', deleteCurrentConv);
+
+/* ── Search ── */
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim().toLowerCase();
+  renderConvList(q ? allConvs.filter(c => c.title.toLowerCase().includes(q)) : allConvs);
+});
 
 /* ── Suggestion cards ── */
-document.querySelectorAll('.suggestion-card').forEach(card => {
+document.querySelectorAll('.card').forEach(card => {
   card.addEventListener('click', () => {
     userInput.value = card.dataset.msg;
     userInput.dispatchEvent(new Event('input'));
@@ -58,25 +70,40 @@ document.querySelectorAll('.suggestion-card').forEach(card => {
   });
 });
 
-/* ── Functions ── */
-
+/* ════════════════════════════════════
+   Conversations
+════════════════════════════════════ */
 async function loadConversations() {
   const res = await fetch('/api/conversations');
-  const list = await res.json();
-  renderConvList(list);
+  allConvs = await res.json();
+  renderConvList(allConvs);
 }
 
 function renderConvList(list) {
   convList.innerHTML = '';
+
   if (!list.length) {
-    convList.innerHTML = '<div style="padding:12px 10px;color:#444;font-size:12px;">No conversations yet</div>';
+    convList.innerHTML = '<div class="conv-empty">No conversations yet</div>';
     return;
   }
+
+  const label = document.createElement('div');
+  label.className = 'conv-section-label';
+  label.textContent = 'Recent';
+  convList.appendChild(label);
+
   list.forEach(c => {
     const el = document.createElement('div');
     el.className = 'conv-item' + (c.id === activeConvId ? ' active' : '');
     el.dataset.id = c.id;
-    el.innerHTML = `<div class="conv-item-icon"></div><div class="conv-title" title="${escHtml(c.title)}">${escHtml(c.title)}</div>`;
+    el.innerHTML = `
+      <div class="conv-dot"></div>
+      <div class="conv-title" title="${esc(c.title)}">${esc(c.title)}</div>
+      <button class="conv-del" title="Delete" onclick="deleteConv(event,'${c.id}')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>`;
     el.addEventListener('click', () => loadConversation(c.id));
     convList.appendChild(el);
   });
@@ -88,9 +115,7 @@ async function loadConversation(id) {
   const data = await res.json();
 
   activeConvId = id;
-  chatTitle.textContent = data.title;
-  messages.innerHTML = '';
-
+  messagesEl.innerHTML = '';
   data.messages.forEach(m => appendMessage(m.role, m.content, false));
 
   showChat();
@@ -100,78 +125,81 @@ async function loadConversation(id) {
 
 function startNewChat() {
   activeConvId = null;
-  messages.innerHTML = '';
-  chatTitle.textContent = 'New Chat';
+  messagesEl.innerHTML = '';
   showWelcome();
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
   userInput.focus();
 }
 
-async function deleteCurrentConv() {
-  if (!activeConvId) return;
-  if (!confirm('Delete this conversation?')) return;
-  await fetch(`/api/conversations/${activeConvId}`, { method: 'DELETE' });
-  startNewChat();
+async function deleteConv(e, id) {
+  e.stopPropagation();
+  await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+  if (id === activeConvId) startNewChat();
   await loadConversations();
 }
 
+/* ════════════════════════════════════
+   View helpers
+════════════════════════════════════ */
 function showChat() {
   welcome.classList.add('hidden');
   chatArea.classList.remove('hidden');
 }
-
 function showWelcome() {
   chatArea.classList.add('hidden');
   welcome.classList.remove('hidden');
 }
-
 function scrollToBottom() {
-  messages.scrollTop = messages.scrollHeight;
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
+/* ════════════════════════════════════
+   Messages
+════════════════════════════════════ */
 function appendMessage(role, content, streaming = false) {
-  const msg = document.createElement('div');
-  msg.className = `message ${role}`;
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
 
-  const avatarLetter = role === 'user' ? 'J' : 'B';
-  const label = role === 'user' ? 'You' : 'Burf';
+  if (role === 'user') {
+    el.innerHTML = `<div class="msg-bubble">${esc(content).replace(/\n/g,'<br>')}</div>`;
+  } else {
+    const bodyHtml = content ? marked.parse(content) : '';
+    el.innerHTML = `
+      <div class="msg-header">
+        <div class="msg-avatar">B</div>
+        <span class="msg-name">Burf</span>
+      </div>
+      <div class="msg-body">${bodyHtml}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
+  }
 
-  const contentHtml = role === 'assistant'
-    ? marked.parse(content || '')
-    : escHtml(content).replace(/\n/g, '<br>');
-
-  msg.innerHTML = `
-    <div class="msg-avatar">${avatarLetter}</div>
-    <div class="msg-body">
-      <div class="msg-label">${label}</div>
-      <div class="msg-content">${contentHtml}${streaming ? '<span class="cursor-blink"></span>' : ''}</div>
-    </div>
-  `;
-
-  messages.appendChild(msg);
+  messagesEl.appendChild(el);
   scrollToBottom();
-  return msg;
+  return el;
 }
 
+/* ════════════════════════════════════
+   Send / stream
+════════════════════════════════════ */
 async function send() {
   const text = userInput.value.trim();
   if (!text || isStreaming) return;
 
-  isStreaming = true;
-  sendBtn.disabled = true;
+  isStreaming   = true;
+  stopRequested = false;
+  sendBtn.classList.add('hidden');
+  stopBtn.classList.remove('hidden');
   userInput.value = '';
   userInput.style.height = 'auto';
+  userInput.disabled = true;
 
   showChat();
   appendMessage('user', text, false);
 
-  // Streaming assistant message
   const assistantEl = appendMessage('assistant', '', true);
-  const contentEl = assistantEl.querySelector('.msg-content');
+  const bodyEl = assistantEl.querySelector('.msg-body');
 
   let fullText = '';
   let newConvId = activeConvId;
@@ -183,11 +211,13 @@ async function send() {
       body: JSON.stringify({ conversation_id: activeConvId, message: text }),
     });
 
-    const reader = response.body.getReader();
+    const reader  = response.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    let buffer    = '';
 
-    while (true) {
+    outer: while (true) {
+      if (stopRequested) { reader.cancel(); break; }
+
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -196,46 +226,50 @@ async function send() {
       buffer = lines.pop();
 
       for (const line of lines) {
-        if (!line.trim() || line.startsWith(':')) continue;
+        if (stopRequested) break outer;
+        if (!line.trim() || line.startsWith(':') || line.startsWith('event:')) continue;
+        if (!line.startsWith('data:')) continue;
 
-        if (line.startsWith('event:')) continue;
+        try {
+          const p = JSON.parse(line.slice(5).trim());
 
-        if (line.startsWith('data:')) {
-          const raw = line.slice(5).trim();
-          try {
-            const parsed = JSON.parse(raw);
-
-            if (parsed.token !== undefined) {
-              fullText += parsed.token;
-              contentEl.innerHTML = marked.parse(fullText) + '<span class="cursor-blink"></span>';
-              scrollToBottom();
-            }
-
-            if (parsed.conversation_id) {
-              newConvId = parsed.conversation_id;
-              if (parsed.title) chatTitle.textContent = parsed.title;
-            }
-
-            if (parsed.error) {
-              contentEl.innerHTML = `<span style="color:#e55">Error: ${escHtml(parsed.error)}</span>`;
-            }
-          } catch (_) {}
-        }
+          if (p.token !== undefined) {
+            fullText += p.token;
+            bodyEl.innerHTML = marked.parse(fullText) + '<span class="cursor"></span>';
+            scrollToBottom();
+          }
+          if (p.conversation_id) {
+            newConvId = p.conversation_id;
+          }
+          if (p.error) {
+            bodyEl.innerHTML = `<span style="color:var(--red)">Error: ${esc(p.error)}</span>`;
+          }
+        } catch (_) {}
       }
     }
 
-    // Finalize
-    contentEl.innerHTML = marked.parse(fullText || '(no response)');
-    document.querySelectorAll('.msg-content pre code').forEach(el => hljs.highlightElement(el));
-
+    bodyEl.innerHTML = marked.parse(fullText || '…');
     activeConvId = newConvId;
     await loadConversations();
 
   } catch (err) {
-    contentEl.innerHTML = `<span style="color:#e55">Connection error: ${escHtml(err.message)}</span>`;
+    bodyEl.innerHTML = `<span style="color:var(--red)">Connection error: ${esc(err.message)}</span>`;
   } finally {
     isStreaming = false;
-    sendBtn.disabled = false;
+    stopBtn.classList.add('hidden');
+    sendBtn.classList.remove('hidden');
+    sendBtn.disabled = true;
+    userInput.disabled = false;
     userInput.focus();
   }
+}
+
+/* ── Copy code ── */
+function copyCode(btn) {
+  const code = btn.closest('.code-block').querySelector('code').innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  });
 }
