@@ -1,18 +1,17 @@
 /* ── Marked config ── */
 const renderer = new marked.Renderer();
 renderer.code = (code, lang) => {
-  const validLang = lang && hljs.getLanguage(lang) ? lang : '';
-  const highlighted = validLang
-    ? hljs.highlight(code, { language: validLang }).value
+  const valid = lang && hljs.getLanguage(lang) ? lang : '';
+  const highlighted = valid
+    ? hljs.highlight(code, { language: valid }).value
     : hljs.highlightAuto(code).value;
-  return `
-    <div class="code-block">
-      <div class="code-block-header">
-        <span class="code-lang">${lang || 'code'}</span>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-      </div>
-      <pre><code>${highlighted}</code></pre>
-    </div>`;
+  return `<div class="code-block">
+    <div class="code-block-header">
+      <span class="code-lang">${lang || 'code'}</span>
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    </div>
+    <pre><code>${highlighted}</code></pre>
+  </div>`;
 };
 marked.setOptions({ renderer, breaks: true, gfm: true });
 
@@ -32,6 +31,8 @@ const sendBtn     = document.getElementById('send-btn');
 const stopBtn     = document.getElementById('stop-btn');
 const newChatBtn  = document.getElementById('new-chat-btn');
 const searchInput = document.getElementById('search-input');
+const scrollBtn   = document.getElementById('scroll-btn');
+const toastEl     = document.getElementById('toasts');
 
 /* ── Boot ── */
 loadConversations();
@@ -43,7 +44,6 @@ userInput.addEventListener('input', () => {
   userInput.style.height = Math.min(userInput.scrollHeight, 180) + 'px';
   sendBtn.disabled = !userInput.value.trim() || isStreaming;
 });
-
 userInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) send(); }
 });
@@ -51,6 +51,13 @@ userInput.addEventListener('keydown', e => {
 sendBtn.addEventListener('click', send);
 stopBtn.addEventListener('click', () => { stopRequested = true; });
 newChatBtn.addEventListener('click', startNewChat);
+scrollBtn.addEventListener('click', () => { chatArea.scrollTop = chatArea.scrollHeight; });
+
+/* ── Smart scroll button ── */
+chatArea.addEventListener('scroll', () => {
+  const fromBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
+  scrollBtn.classList.toggle('hidden', fromBottom < 150);
+});
 
 /* ── Search ── */
 searchInput.addEventListener('input', () => {
@@ -60,8 +67,7 @@ searchInput.addEventListener('input', () => {
 
 /* ── Keyboard shortcuts ── */
 document.addEventListener('keydown', e => {
-  const mod = e.metaKey || e.ctrlKey;
-  if (mod && e.key === 'k') { e.preventDefault(); startNewChat(); }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); startNewChat(); }
   if (e.key === 'Escape' && document.activeElement === userInput) userInput.blur();
 });
 
@@ -73,6 +79,55 @@ document.querySelectorAll('.card').forEach(card => {
     send();
   });
 });
+
+/* ════════════════════════════════════
+   Date helpers
+════════════════════════════════════ */
+function toLocal(iso) {
+  return new Date(iso && !iso.endsWith('Z') ? iso + 'Z' : iso);
+}
+
+function relativeTime(iso) {
+  const d = toLocal(iso);
+  const diffMs  = Date.now() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin <  1)  return 'now';
+  if (diffMin < 60)  return `${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH   < 24)  return `${diffH}h`;
+  if (diffH   < 48)  return 'yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  return toLocal(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function groupByDate(list) {
+  const now = new Date();
+  const startOf = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const todayMs     = startOf(now);
+  const yesterdayMs = todayMs - 86400000;
+  const weekMs      = todayMs - 6 * 86400000;
+
+  const groups = [
+    { label: 'Today',     items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'This week', items: [] },
+    { label: 'Earlier',   items: [] },
+  ];
+
+  list.forEach(c => {
+    const ms = startOf(toLocal(c.updated_at));
+    if      (ms >= todayMs)     groups[0].items.push(c);
+    else if (ms >= yesterdayMs) groups[1].items.push(c);
+    else if (ms >= weekMs)      groups[2].items.push(c);
+    else                        groups[3].items.push(c);
+  });
+
+  return groups.filter(g => g.items.length);
+}
 
 /* ════════════════════════════════════
    Conversations
@@ -90,34 +145,36 @@ function renderConvList(list) {
     return;
   }
 
-  const label = document.createElement('div');
-  label.className = 'conv-section-label';
-  label.textContent = 'Recent';
-  convList.appendChild(label);
+  for (const group of groupByDate(list)) {
+    const labelEl = document.createElement('div');
+    labelEl.className = 'conv-group-label';
+    labelEl.textContent = group.label;
+    convList.appendChild(labelEl);
 
-  list.forEach(c => {
-    const el = document.createElement('div');
-    el.className = 'conv-item' + (c.id === activeConvId ? ' active' : '');
-    el.dataset.id = c.id;
-    el.innerHTML = `
-      <div class="conv-dot"></div>
-      <div class="conv-title" title="${esc(c.title)}">${esc(c.title)}</div>
-      <button class="conv-del" title="Delete" onclick="deleteConv(event,'${c.id}')">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>`;
+    group.items.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'conv-item' + (c.id === activeConvId ? ' active' : '');
+      el.dataset.id = c.id;
+      el.innerHTML = `
+        <div class="conv-dot"></div>
+        <div class="conv-title" title="${esc(c.title)}">${esc(c.title)}</div>
+        <div class="conv-meta">
+          <span class="conv-time">${relativeTime(c.updated_at)}</span>
+          <button class="conv-del" title="Delete" onclick="deleteConv(event,'${c.id}')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>`;
 
-    el.addEventListener('click', () => loadConversation(c.id));
-
-    // Double-click title to rename
-    el.querySelector('.conv-title').addEventListener('dblclick', e => {
-      e.stopPropagation();
-      startRename(el, c.id, c.title);
+      el.addEventListener('click', () => loadConversation(c.id));
+      el.querySelector('.conv-title').addEventListener('dblclick', e => {
+        e.stopPropagation();
+        startRename(el, c.id, c.title);
+      });
+      convList.appendChild(el);
     });
-
-    convList.appendChild(el);
-  });
+  }
 }
 
 function startRename(el, id, currentTitle) {
@@ -126,8 +183,7 @@ function startRename(el, id, currentTitle) {
   input.className = 'conv-rename-input';
   input.value = currentTitle;
   titleEl.replaceWith(input);
-  input.focus();
-  input.select();
+  input.focus(); input.select();
 
   const finish = async () => {
     const newTitle = input.value.trim();
@@ -137,9 +193,6 @@ function startRename(el, id, currentTitle) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTitle }),
       });
-      if (id === activeConvId) {
-        // update header title if this conv is open — there's no header now, but update allConvs
-      }
     }
     await loadConversations();
   };
@@ -152,17 +205,49 @@ function startRename(el, id, currentTitle) {
 }
 
 async function loadConversation(id) {
+  if (id === activeConvId) return;
+
+  activeConvId = id;
+  showChat();
+  showSkeleton();
+  await loadConversations();
+
   const res = await fetch(`/api/conversations/${id}`);
   if (!res.ok) return;
   const data = await res.json();
 
-  activeConvId = id;
   messagesEl.innerHTML = '';
   data.messages.forEach(m => appendMessage(m.role, m.content, false, m.created_at));
+  scrollToBottom(true);
+  userInput.focus();
+}
 
-  showChat();
-  scrollToBottom();
-  await loadConversations();
+function showSkeleton() {
+  messagesEl.innerHTML = `
+    <div class="skeleton-wrap">
+      <div class="skeleton-msg">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="skel skel-avatar"></div>
+          <div class="skel skel-short"></div>
+        </div>
+        <div class="skel skel-long"></div>
+        <div class="skel skel-xl"></div>
+        <div class="skel skel-med"></div>
+      </div>
+      <div class="skeleton-msg" style="align-items:flex-end">
+        <div class="skel skel-short"></div>
+      </div>
+      <div class="skeleton-msg">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="skel skel-avatar"></div>
+          <div class="skel skel-short"></div>
+        </div>
+        <div class="skel skel-xl"></div>
+        <div class="skel skel-long"></div>
+        <div class="skel skel-med"></div>
+        <div class="skel skel-long"></div>
+      </div>
+    </div>`;
 }
 
 function startNewChat() {
@@ -178,6 +263,7 @@ async function deleteConv(e, id) {
   await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
   if (id === activeConvId) startNewChat();
   await loadConversations();
+  toast('Conversation deleted');
 }
 
 /* ════════════════════════════════════
@@ -185,7 +271,11 @@ async function deleteConv(e, id) {
 ════════════════════════════════════ */
 function showChat()    { welcome.classList.add('hidden'); chatArea.classList.remove('hidden'); }
 function showWelcome() { chatArea.classList.add('hidden'); welcome.classList.remove('hidden'); }
-function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
+
+function scrollToBottom(force = false) {
+  const fromBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
+  if (force || fromBottom < 200) chatArea.scrollTop = chatArea.scrollHeight;
+}
 
 function esc(str) {
   return String(str)
@@ -193,10 +283,17 @@ function esc(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function formatTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/* ── Toast ── */
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  toastEl.appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+  }, 2000);
 }
 
 /* ════════════════════════════════════
@@ -223,20 +320,27 @@ function appendMessage(role, content, streaming = false, createdAt = null) {
         ${timeStr ? `<span class="msg-time-inline">${timeStr}</span>` : ''}
       </div>
       <div class="msg-body">${bodyHtml}</div>
-      ${!streaming ? `
-      <div class="msg-actions">
-        <button class="msg-action-btn" onclick="copyMessage(this)" title="Copy response">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-          </svg>
-          Copy
-        </button>
-      </div>` : ''}`;
+      ${!streaming ? '<div class="msg-actions"></div>' : ''}`;
+
+    if (!streaming) addMessageActions(el, content);
   }
 
   messagesEl.appendChild(el);
   scrollToBottom();
   return el;
+}
+
+function addMessageActions(el, rawText) {
+  const actions = el.querySelector('.msg-actions');
+  if (!actions) return;
+  actions.innerHTML = `
+    <button class="msg-action-btn" onclick="copyMessage(this)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2"/>
+        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+      </svg>
+      Copy
+    </button>`;
 }
 
 /* ════════════════════════════════════
@@ -246,8 +350,8 @@ async function send() {
   const text = userInput.value.trim();
   if (!text || isStreaming) return;
 
-  isStreaming    = true;
-  stopRequested  = false;
+  isStreaming   = true;
+  stopRequested = false;
   sendBtn.classList.add('hidden');
   stopBtn.classList.remove('hidden');
   userInput.value = '';
@@ -260,9 +364,9 @@ async function send() {
   const assistantEl = appendMessage('assistant', '', true);
   const bodyEl = assistantEl.querySelector('.msg-body');
 
-  let fullText    = '';
-  let firstToken  = true;
-  let newConvId   = activeConvId;
+  let fullText   = '';
+  let firstToken = true;
+  let newConvId  = activeConvId;
 
   try {
     const response = await fetch('/api/chat/stream', {
@@ -291,7 +395,6 @@ async function send() {
 
         try {
           const p = JSON.parse(line.slice(5).trim());
-
           if (p.token !== undefined) {
             if (firstToken) { firstToken = false; bodyEl.innerHTML = ''; }
             fullText += p.token;
@@ -299,27 +402,13 @@ async function send() {
             scrollToBottom();
           }
           if (p.conversation_id) newConvId = p.conversation_id;
-          if (p.error) {
-            bodyEl.innerHTML = `<div class="msg-error">Error: ${esc(p.error)}</div>`;
-          }
+          if (p.error) bodyEl.innerHTML = `<div class="msg-error">Error: ${esc(p.error)}</div>`;
         } catch (_) {}
       }
     }
 
-    // Finalize message
     bodyEl.innerHTML = marked.parse(fullText || '…');
-
-    // Add action buttons
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    actions.innerHTML = `
-      <button class="msg-action-btn" onclick="copyMessage(this)" title="Copy response">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-        </svg>
-        Copy
-      </button>`;
-    assistantEl.appendChild(actions);
+    addMessageActions(assistantEl, fullText);
 
     activeConvId = newConvId;
     await loadConversations();
@@ -343,6 +432,7 @@ function copyCode(btn) {
     btn.textContent = 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    toast('Code copied');
   });
 }
 
@@ -351,15 +441,17 @@ function copyMessage(btn) {
   navigator.clipboard.writeText(bodyEl.innerText).then(() => {
     btn.classList.add('copied');
     btn.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <polyline points="20 6 9 17 4 12"/>
       </svg> Copied`;
     setTimeout(() => {
       btn.classList.remove('copied');
       btn.innerHTML = `
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
         </svg> Copy`;
     }, 1800);
+    toast('Copied to clipboard');
   });
 }

@@ -4,6 +4,7 @@ cd "$(dirname "$0")"
 
 PORT=7878
 RELOAD=false
+PID_FILE=".burf.pid"
 
 usage() {
   echo "Usage: start.sh [--port PORT] [--reload] [--help]"
@@ -16,12 +17,23 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --port)   PORT="$2"; shift 2 ;;
-    --reload) RELOAD=true; shift ;;
+    --port)    PORT="$2"; shift 2 ;;
+    --reload)  RELOAD=true; shift ;;
     --help|-h) usage ;;
     *) echo "Unknown option: $1"; usage ;;
   esac
 done
+
+# Kill previous instance if running
+if [[ -f "$PID_FILE" ]]; then
+  OLD_PID=$(cat "$PID_FILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "  Stopping previous instance (PID $OLD_PID)…"
+    kill "$OLD_PID" 2>/dev/null
+    sleep 1
+  fi
+  rm -f "$PID_FILE"
+fi
 
 command -v uvicorn &>/dev/null || { echo "Error: uvicorn not found. Run: pip install uvicorn"; exit 1; }
 [[ -f .env ]] || echo "Warning: no .env file found — ANTHROPIC_API_KEY may be missing"
@@ -37,4 +49,9 @@ $RELOAD && echo "  │   reload: on                 │"
 echo "  ╰──────────────────────────────╯"
 echo ""
 
-exec uvicorn main:app $ARGS
+uvicorn main:app $ARGS &
+UVICORN_PID=$!
+echo $UVICORN_PID > "$PID_FILE"
+
+trap "kill $UVICORN_PID 2>/dev/null; rm -f $PID_FILE; exit" INT TERM EXIT
+wait $UVICORN_PID

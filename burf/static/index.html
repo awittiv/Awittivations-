@@ -6,7 +6,7 @@
   <title>Burf</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -21,8 +21,8 @@
           <div class="logo-mark">B</div>
           <span class="logo-name">Burf</span>
         </div>
-        <button id="new-chat-btn" class="icon-btn" title="New chat">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <button id="new-chat-btn" class="icon-btn" title="New chat (⌘K)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M12 5v14M5 12h14"/>
           </svg>
         </button>
@@ -32,7 +32,7 @@
         <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
         </svg>
-        <input id="search-input" type="text" placeholder="Search conversations…" />
+        <input id="search-input" type="text" placeholder="Search…" autocomplete="off" />
       </div>
 
       <div id="conv-list" class="conv-list"></div>
@@ -53,8 +53,8 @@
 
       <!-- Welcome -->
       <div id="welcome" class="welcome">
+        <div class="welcome-glow"></div>
         <div class="welcome-inner">
-          <div class="welcome-glow"></div>
           <div class="welcome-mark">B</div>
           <h1 class="welcome-title">Good to see you, Jack.</h1>
           <p class="welcome-sub">What are we working on today?</p>
@@ -88,28 +88,38 @@
         <div id="messages" class="messages"></div>
       </div>
 
+      <!-- Scroll to bottom -->
+      <button id="scroll-btn" class="scroll-btn hidden" title="Scroll to bottom">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 5v14M5 15l7 7 7-7"/>
+        </svg>
+      </button>
+
       <!-- Input -->
       <div id="input-wrap" class="input-wrap">
         <div class="input-box">
           <textarea id="user-input" placeholder="Message Burf…" rows="1" maxlength="10000"></textarea>
           <div class="input-actions">
-            <button id="stop-btn" class="stop-btn hidden" title="Stop">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <button id="stop-btn" class="stop-btn hidden" title="Stop generating">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="4" y="4" width="16" height="16" rx="2.5"/>
               </svg>
             </button>
             <button id="send-btn" class="send-btn" disabled title="Send (Enter)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M12 19V5M5 12l7-7 7 7"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="input-hint">claude-sonnet-4-6 &nbsp;·&nbsp; Enter to send &nbsp;·&nbsp; Shift+Enter for newline</div>
+        <div class="input-hint">⌘K new chat &nbsp;·&nbsp; Enter send &nbsp;·&nbsp; Shift+Enter newline</div>
       </div>
 
     </main>
   </div>
+
+  <!-- Toast container -->
+  <div id="toasts"></div>
 
   <script src="/static/app.js"></script>
 </body>
