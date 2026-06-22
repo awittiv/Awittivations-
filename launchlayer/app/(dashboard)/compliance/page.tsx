@@ -39,28 +39,26 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  function load() {
-    setLoading(true);
-    setError("");
-    Promise.all([bankitApi.payments.sweepSummary(), bankitApi.payments.sweepHistory()])
-      .then(([s, h]) => {
-        setSummary(s);
-        setHistory(h);
-      })
-      .catch((e: unknown) => {
-        setError((e as Error).message ?? "Failed to load compliance data");
-      })
-      .finally(() => setLoading(false));
+  async function load() {
+    try {
+      const [s, h] = await Promise.all([bankitApi.payments.sweepSummary(), bankitApi.payments.sweepHistory()]);
+      setSummary(s);
+      setHistory(h);
+    } catch (e: unknown) {
+      setError((e as Error).message ?? "Failed to load compliance data");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, []);
 
   if (loading) return <div className="text-sm text-zinc-400">Loading...</div>;
   if (error) return (
     <div className="flex flex-col items-start gap-3">
       <p className="text-sm text-red-500">{error}</p>
       <button
-        onClick={load}
+        onClick={() => { setLoading(true); setError(""); void load(); }}
         className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors"
       >
         Retry
