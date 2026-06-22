@@ -26,6 +26,9 @@ def calculate_sweep(gross_amount: float) -> dict:
     Calculate the Atomic Sweep breakdown for a given gross payment.
     Returns a dict with all withholding amounts and the net credit.
     """
+    if gross_amount <= 0:
+        raise ValueError(f"gross_amount must be positive, got {gross_amount}")
+
     mi_state = round(gross_amount * MI_STATE_RATE, 6)
     muskegon_city = round(gross_amount * MUSKEGON_CITY_RATE, 6)
     federal = round(gross_amount * FEDERAL_ESTIMATE_RATE, 6)
@@ -65,6 +68,9 @@ async def execute_atomic_sweep(
     Low-risk sweeps arrive here directly; high-value/W2G sweeps arrive here
     only after human sign-off via hitl_gate.approve_sweep().
     """
+    if gross_amount <= 0:
+        raise ValueError(f"Cannot execute sweep: gross_amount must be positive, got {gross_amount}")
+
     sweep = calculate_sweep(gross_amount)
 
     tx_hash = None

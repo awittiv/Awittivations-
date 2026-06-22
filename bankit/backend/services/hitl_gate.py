@@ -104,16 +104,19 @@ async def approve_sweep(
         .select("*")
         .eq("task_id", task_id)
         .eq("status", "pending")
-        .single()
+        .limit(1)
         .execute()
     )
     if not row.data:
         raise KeyError(f"Task {task_id} not found or already resolved.")
 
-    task = row.data
+    task = row.data[0]
     final_amount = float(
         modifications.get("gross_amount", task["gross_amount"]) if modifications else task["gross_amount"]
     )
+
+    if final_amount <= 0:
+        raise ValueError(f"Modified gross_amount must be positive, got {final_amount}")
 
     client.table("hitl_review_queue").update({
         "status": "approved",
@@ -159,7 +162,7 @@ async def reject_sweep(task_id: str, operator_id: str, reason: str) -> dict:
         .select("*")
         .eq("task_id", task_id)
         .eq("status", "pending")
-        .single()
+        .limit(1)
         .execute()
     )
     if not row.data:
