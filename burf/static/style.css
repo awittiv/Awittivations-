@@ -528,5 +528,68 @@ html, body {
 }
 .icon-btn:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 
+/* ── Thinking indicator ── */
+.thinking {
+  display: flex; gap: 5px; align-items: center; padding: 6px 2px;
+}
+.thinking span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-3);
+  animation: thinking-pulse 1.3s ease-in-out infinite;
+}
+.thinking span:nth-child(2) { animation-delay: .18s; }
+.thinking span:nth-child(3) { animation-delay: .36s; }
+@keyframes thinking-pulse {
+  0%, 80%, 100% { transform: scale(.55); opacity: .35; }
+  40%            { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Message timestamps ── */
+.msg-time {
+  font-size: 10.5px; color: var(--text-3);
+  margin-top: 4px; padding: 0 4px;
+  opacity: 0; transition: opacity .15s;
+}
+.msg.user:hover .msg-time { opacity: 1; }
+
+.msg-time-inline {
+  font-size: 10.5px; color: var(--text-3);
+  margin-left: auto;
+  opacity: 0; transition: opacity .15s;
+}
+.msg.assistant:hover .msg-time-inline { opacity: 1; }
+
+/* ── Message action buttons ── */
+.msg-actions {
+  display: flex; gap: 6px; margin-top: 10px;
+  opacity: 0; transition: opacity .15s;
+}
+.msg.assistant:hover .msg-actions { opacity: 1; }
+
+.msg-action-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-family: var(--font); font-weight: 500;
+  color: var(--text-3); background: none;
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 4px 10px; cursor: pointer; transition: all .15s;
+}
+.msg-action-btn:hover { color: var(--text-2); border-color: var(--border-2); background: var(--surface-2); }
+.msg-action-btn.copied { color: var(--accent); border-color: rgba(0,201,167,.3); background: var(--accent-dim); }
+
+/* ── Message error ── */
+.msg-error {
+  color: var(--red); font-size: 13px;
+  padding: 8px 12px; background: rgba(224,85,85,.08);
+  border: 1px solid rgba(224,85,85,.2); border-radius: 8px;
+}
+
+/* ── Inline rename input ── */
+.conv-rename-input {
+  flex: 1; background: var(--surface-3);
+  border: 1px solid var(--accent); border-radius: 5px;
+  color: var(--text); font-family: var(--font); font-size: 13px;
+  padding: 2px 6px; outline: none; min-width: 0;
+}
+
 /* ── Util ── */
 .hidden { display: none !important; }

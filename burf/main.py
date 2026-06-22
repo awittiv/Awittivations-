@@ -74,6 +74,9 @@ class MessageRequest(BaseModel):
     conversation_id: str | None = None
     message: str
 
+class RenameRequest(BaseModel):
+    title: str
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -86,7 +89,8 @@ async def root():
 def list_conversations():
     with get_db() as conn:
         rows = conn.execute("""
-            SELECT c.id, c.title, COUNT(m.id) AS message_count
+            SELECT c.id, c.title, COUNT(m.id) AS message_count,
+                   c.created_at, c.updated_at
             FROM conversations c
             LEFT JOIN messages m ON m.conversation_id = c.id
             GROUP BY c.id
@@ -102,10 +106,22 @@ def get_conversation(cid: str):
         if not conv:
             raise HTTPException(404, "Conversation not found")
         msgs = conn.execute(
-            "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY created_at",
+            "SELECT role, content, created_at FROM messages WHERE conversation_id=? ORDER BY created_at",
             (cid,)
         ).fetchall()
     return {"id": conv["id"], "title": conv["title"], "messages": [dict(m) for m in msgs]}
+
+
+@app.patch("/api/conversations/{cid}")
+def rename_conversation(cid: str, body: RenameRequest):
+    title = body.title.strip()[:80]
+    if not title:
+        raise HTTPException(400, "Title cannot be empty")
+    with get_db() as conn:
+        if not conn.execute("SELECT 1 FROM conversations WHERE id=?", (cid,)).fetchone():
+            raise HTTPException(404, "Conversation not found")
+        conn.execute("UPDATE conversations SET title=? WHERE id=?", (title, cid))
+    return {"ok": True, "title": title}
 
 
 @app.delete("/api/conversations/{cid}")
@@ -121,7 +137,6 @@ def delete_conversation(cid: str):
 async def chat_stream(body: MessageRequest):
     cid = body.conversation_id
 
-    # Load or create conversation, append user message
     with get_db() as conn:
         if cid:
             exists = conn.execute("SELECT 1 FROM conversations WHERE id=?", (cid,)).fetchone()
@@ -130,25 +145,17 @@ async def chat_stream(body: MessageRequest):
 
         if not cid:
             cid = str(uuid.uuid4())
-            title = body.message[:60]
-            conn.execute("INSERT INTO conversations (id, title) VALUES (?,?)", (cid, title))
-        else:
-            # Update title from first user message if conversation is new
-            count = conn.execute(
-                "SELECT COUNT(*) FROM messages WHERE conversation_id=?", (cid,)
-            ).fetchone()[0]
-            if count == 0:
-                conn.execute(
-                    "UPDATE conversations SET title=?, updated_at=datetime('now') WHERE id=?",
-                    (body.message[:60], cid)
-                )
+            conn.execute("INSERT INTO conversations (id, title) VALUES (?,?)", (cid, body.message[:60]))
+
+        prior_count = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE conversation_id=?", (cid,)
+        ).fetchone()[0]
 
         conn.execute(
             "INSERT INTO messages (conversation_id, role, content) VALUES (?,?,?)",
             (cid, "user", body.message)
         )
 
-        # Fetch full history for Claude
         history = conn.execute(
             "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY created_at",
             (cid,)
@@ -156,9 +163,11 @@ async def chat_stream(body: MessageRequest):
         title = conn.execute("SELECT title FROM conversations WHERE id=?", (cid,)).fetchone()["title"]
 
     messages_for_claude = [{"role": r["role"], "content": r["content"]} for r in history]
+    is_first_exchange = prior_count == 0
 
     async def generate() -> AsyncIterator[dict]:
         full_response = ""
+        final_title = title
         try:
             yield {"event": "start", "data": json.dumps({"conversation_id": cid})}
 
@@ -178,11 +187,31 @@ async def chat_stream(body: MessageRequest):
                     "INSERT INTO messages (conversation_id, role, content) VALUES (?,?,?)",
                     (cid, "assistant", full_response)
                 )
-                conn.execute(
-                    "UPDATE conversations SET updated_at=datetime('now') WHERE id=?", (cid,)
-                )
+                conn.execute("UPDATE conversations SET updated_at=datetime('now') WHERE id=?", (cid,))
 
-            yield {"event": "done", "data": json.dumps({"conversation_id": cid, "title": title})}
+            # Generate a smart title after the first exchange
+            if is_first_exchange and full_response:
+                try:
+                    t = client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=16,
+                        messages=[{
+                            "role": "user",
+                            "content": (
+                                f"User message: {body.message[:300]}\n"
+                                f"Assistant reply (first 200 chars): {full_response[:200]}\n\n"
+                                "Write a 3-5 word title for this conversation. "
+                                "Reply with ONLY the title — no quotes, no punctuation at the end."
+                            )
+                        }]
+                    )
+                    final_title = t.content[0].text.strip().strip('"\'').strip()[:60]
+                    with get_db() as conn:
+                        conn.execute("UPDATE conversations SET title=? WHERE id=?", (final_title, cid))
+                except Exception:
+                    pass
+
+            yield {"event": "done", "data": json.dumps({"conversation_id": cid, "title": final_title})}
 
         except Exception as e:
             yield {"event": "error", "data": json.dumps({"error": str(e)})}
