@@ -99,11 +99,18 @@ async def disburse_loan(
     if not wallet_address:
         raise HTTPException(status_code=400, detail="Merchant has no wallet address on file")
 
+    # Atomic claim — prevents double-disbursement if two requests race
+    claimed = await supabase_service.claim_disbursement(loan_id)
+    if not claimed:
+        raise HTTPException(status_code=409, detail="Disbursement already in progress or completed")
+
     score = loan.get("trust_score") or 50
     trust_score_hash = build_trust_score_hash(loan_id, score, "admin-manual-disburse")
     tx_hash = await release_micro_liquidity(wallet_address, loan["amount_inr"], trust_score_hash)
 
     if not tx_hash:
+        # Release the claim so admin can retry
+        await supabase_service.update_loan(loan_id, {"tx_hash": None})
         raise HTTPException(
             status_code=502,
             detail="On-chain disbursement failed — check wallet balance and RPC connection",

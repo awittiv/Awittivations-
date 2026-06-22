@@ -119,6 +119,12 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             print(f"[Pipeline] Loan {loan_id} approved — no wallet address, skipping disbursement")
             return
 
+        # Atomic claim — guards against duplicate pipeline runs (e.g. Twilio webhook retries)
+        claimed = await supabase_service.claim_disbursement(loan_id)
+        if not claimed:
+            print(f"[Pipeline] Loan {loan_id} disbursement already claimed — skipping")
+            return
+
         trust_score_hash = build_trust_score_hash(loan_id, ai_result.score, ai_result.reasoning)
         tx_hash = await release_micro_liquidity(wallet_address, loan["amount_inr"], trust_score_hash)
 
@@ -157,7 +163,8 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
                 print(f"[Pipeline] Loan {loan_id} — Passport update failed (non-blocking): {passport_err}")
         else:
             reason = "On-chain disbursement returned no tx_hash — RPC or contract error"
-            await supabase_service.update_loan(loan_id, {"error_reason": reason})
+            # Revert claim so the loan stays approved and admin can manually disburse
+            await supabase_service.update_loan(loan_id, {"tx_hash": None, "error_reason": reason})
             print(f"[Pipeline] Loan {loan_id} approved but on-chain disbursement failed")
 
     except Exception as e:

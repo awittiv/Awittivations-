@@ -64,6 +64,33 @@ async def add_loan_message(loan_id: str, direction: str, content: str) -> dict:
     return result.data[0]
 
 
+async def claim_disbursement(loan_id: str) -> bool:
+    """Atomically reserve a loan for disbursement. Returns True only once; concurrent callers get False."""
+    client = get_client()
+    result = (
+        client.table("loans")
+        .update({"tx_hash": "PENDING"})
+        .eq("id", loan_id)
+        .eq("status", "approved")
+        .is_("tx_hash", "null")
+        .execute()
+    )
+    return len(result.data) > 0
+
+
+async def claim_repayment(loan_id: str) -> bool:
+    """Atomically mark a loan as repaid. Returns True only once; concurrent callers get False."""
+    client = get_client()
+    result = (
+        client.table("loans")
+        .update({"status": "repaid"})
+        .eq("id", loan_id)
+        .eq("status", "disbursed")
+        .execute()
+    )
+    return len(result.data) > 0
+
+
 async def create_transaction(loan_id: str, amount: float, tx_type: str, polygon_tx_hash: str | None = None) -> dict:
     client = get_client()
     result = client.table("transactions").insert({

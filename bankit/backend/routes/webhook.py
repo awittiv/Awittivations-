@@ -78,11 +78,18 @@ async def _handle_repay(merchant: dict, phone: str) -> dict:
         return {"status": "no_active_loan", "reply": reply}
 
     loan = disbursed[0]
+
+    # Atomic claim — prevents double-repayment on Twilio retries
+    claimed = await supabase_service.claim_repayment(loan["id"])
+    if not claimed:
+        reply = "Your repayment is already being processed."
+        await send_whatsapp(phone, reply)
+        return {"status": "repayment_already_processed", "reply": reply}
+
     wallet_address = merchant.get("wallet_address")
     tx_hash = await repay_loan_onchain(wallet_address, loan["amount_inr"], loan["id"]) if wallet_address else None
 
     await supabase_service.create_transaction(loan["id"], loan["amount_inr"], "repay", tx_hash)
-    await supabase_service.update_loan(loan["id"], {"status": "repaid"})
 
     reply = (
         f"🎉 *Repayment Received!*\n"
@@ -120,15 +127,24 @@ async def _handle_apply(
     body: str,
     background_tasks: BackgroundTasks,
 ) -> dict:
-    # Block if merchant already has an active disbursed loan
+    # Block if merchant already has an in-flight or active loan
     existing = await supabase_service.get_loans_for_merchant(merchant["id"])
-    if any(l["status"] == "disbursed" for l in existing):
-        active = next(l for l in existing if l["status"] == "disbursed")
-        reply = (
-            f"You already have an active loan of ₹{float(active['amount_inr']):,.0f}.\n"
-            f"Please repay it before applying for a new one.\n\n"
-            f"Reply *REPAY* to repay now."
-        )
+    active_loan = next(
+        (l for l in existing if l["status"] in ("pending", "approved", "disbursed")), None
+    )
+    if active_loan:
+        if active_loan["status"] == "disbursed":
+            reply = (
+                f"You already have an active loan of ₹{float(active_loan['amount_inr']):,.0f}.\n"
+                f"Please repay it before applying for a new one.\n\n"
+                f"Reply *REPAY* to repay now."
+            )
+        else:
+            reply = (
+                f"Your application for ₹{float(active_loan['amount_inr']):,.0f} is already being processed "
+                f"(status: {active_loan['status']}).\n\n"
+                f"Reply *STATUS* to check for an update."
+            )
         await send_whatsapp(phone, reply)
         return {"status": "active_loan_exists", "reply": reply}
 
