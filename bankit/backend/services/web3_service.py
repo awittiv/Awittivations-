@@ -58,7 +58,7 @@ async def _send_transaction(fn) -> str | None:
     web3 = get_web3()
 
     if not web3.is_connected():
-        print("[Web3] Cannot connect to blockchain network.")
+        logger.error("Cannot connect to blockchain network — RPC: %s", RPC_URL)
         return None
 
     try:
@@ -74,7 +74,7 @@ async def _send_transaction(fn) -> str | None:
         tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
         return web3.to_hex(tx_hash)
     except Exception as e:
-        print(f"[Web3] Transaction failed: {e}")
+        logger.error("Transaction failed: %s", e)
         return None
 
 
