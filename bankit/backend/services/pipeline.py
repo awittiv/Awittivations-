@@ -19,6 +19,9 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
             if kyc_status == "pending":
                 await supabase_service.update_loan(loan_id, {"status": "rejected"})
                 print(f"[Pipeline] Loan {loan_id} rejected — KYC documents not submitted")
+            elif kyc_status == "rejected":
+                await supabase_service.update_loan(loan_id, {"status": "rejected"})
+                print(f"[Pipeline] Loan {loan_id} rejected — KYC rejected by admin")
             else:
                 # under_review: docs submitted but admin hasn't verified yet
                 print(f"[Pipeline] Loan {loan_id} held for human review — KYC status: {kyc_status}")
