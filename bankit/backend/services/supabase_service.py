@@ -15,14 +15,14 @@ def get_client() -> Client:
 
 async def get_merchant_by_phone(phone: str) -> dict | None:
     client = get_client()
-    result = client.table("merchants").select("*").eq("phone", phone).single().execute()
-    return result.data
+    result = client.table("merchants").select("*").eq("phone", phone).limit(1).execute()
+    return result.data[0] if result.data else None
 
 
 async def get_merchant_by_id(merchant_id: str) -> dict | None:
     client = get_client()
-    result = client.table("merchants").select("*").eq("id", merchant_id).single().execute()
-    return result.data
+    result = client.table("merchants").select("*").eq("id", merchant_id).limit(1).execute()
+    return result.data[0] if result.data else None
 
 
 async def create_loan(merchant_id: str, amount_inr: float, purpose: str) -> dict:
@@ -50,8 +50,8 @@ async def get_loans_for_merchant(merchant_id: str) -> list[dict]:
 
 async def get_loan_by_id(loan_id: str) -> dict | None:
     client = get_client()
-    result = client.table("loans").select("*, loan_messages(*)").eq("id", loan_id).single().execute()
-    return result.data
+    result = client.table("loans").select("*, loan_messages(*)").eq("id", loan_id).limit(1).execute()
+    return result.data[0] if result.data else None
 
 
 async def add_loan_message(loan_id: str, direction: str, content: str) -> dict:

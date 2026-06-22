@@ -22,7 +22,7 @@ async def get_api_key_record(x_api_key: str = Security(_header)) -> dict:
         .select("*")
         .eq("key_hash", hashed)
         .eq("active", True)
-        .single()
+        .limit(1)
         .execute()
     )
     if not result.data:
