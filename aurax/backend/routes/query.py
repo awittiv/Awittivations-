@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from backend.auth import require_api_key
 from backend.config import settings
 from backend.services.claude_sql import nl_to_sql, explain_results
 
@@ -26,7 +27,7 @@ async def _execute_sql(sql: str) -> list[dict]:
     return await run_sql(sql)
 
 
-@router.post("/", response_model=QueryResponse)
+@router.post("/", response_model=QueryResponse, dependencies=[Depends(require_api_key)])
 async def natural_language_query(req: QueryRequest):
     """
     Accept a plain-English DeFi question, convert to SQL via Claude,

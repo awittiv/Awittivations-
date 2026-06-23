@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from backend.auth import require_api_key
 from backend.services.data_refresh import refresh_reserves
 
 router = APIRouter(prefix="/refresh", tags=["Data"])
 
 
-@router.post("/")
+@router.post("/", dependencies=[Depends(require_api_key)])
 async def trigger_refresh():
     """Manually trigger a live Aave data refresh from DeFiLlama."""
     try:

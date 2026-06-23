@@ -19,7 +19,15 @@ async def close_db() -> None:
         _db = None
 
 
+def _validate_sql(sql: str) -> None:
+    """Only allow SELECT statements — reject anything destructive."""
+    first = sql.strip().split()[0].upper() if sql.strip() else ""
+    if first != "SELECT":
+        raise ValueError(f"Only SELECT queries are allowed, got: {first}")
+
+
 async def run_sql(sql: str) -> list[dict]:
+    _validate_sql(sql)
     db = await get_db()
     async with db.execute(sql) as cursor:
         rows = await cursor.fetchall()
