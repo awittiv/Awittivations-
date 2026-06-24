@@ -1,4 +1,5 @@
 import aiosqlite
+from fastapi import HTTPException
 from backend.config import settings
 
 _db: aiosqlite.Connection | None = None
@@ -21,9 +22,10 @@ async def close_db() -> None:
 
 def _validate_sql(sql: str) -> None:
     """Only allow SELECT statements — reject anything destructive."""
-    first = sql.strip().split()[0].upper() if sql.strip() else ""
+    stripped = sql.strip()
+    first = stripped.split()[0].upper() if stripped else ""
     if first != "SELECT":
-        raise ValueError(f"Only SELECT queries are allowed, got: {first}")
+        raise HTTPException(status_code=400, detail=f"Only SELECT queries are allowed, got: {first}")
 
 
 async def run_sql(sql: str) -> list[dict]:

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     sqlite_path: str = str(Path(__file__).resolve().parent.parent / "aurax.db")
     use_local_db: bool = True
 
+    aurax_api_key: str
+
     # optional — only needed when use_local_db=false
     allium_api_key: str = ""
     graph_api_key: str = ""

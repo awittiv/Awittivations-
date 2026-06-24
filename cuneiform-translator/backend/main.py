@@ -11,11 +11,21 @@ from PIL import Image
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=True)
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import anthropic
+
+_RATE_DEFAULT   = "60/minute"
+_RATE_TRANSLATE = "30/minute"
+_RATE_IMAGE     = "10/minute"
+_RATE_CDLI      = "20/minute"
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[_RATE_DEFAULT])
 
 # ML sign recognizer (optional — only active if model has been trained)
 ML_DIR = os.path.join(os.path.dirname(__file__), "..", "ml")
@@ -33,6 +43,8 @@ except ImportError:
     _PE_AVAILABLE = False
 
 app = FastAPI(title="Cuneiform Translator")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -87,7 +99,8 @@ class TranslateResponse(BaseModel):
 
 
 @app.post("/api/translate", response_model=TranslateResponse)
-async def translate(req: TranslateRequest):
+@limiter.limit(_RATE_TRANSLATE)
+async def translate(request: Request, req: TranslateRequest):
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="No text provided")
@@ -234,7 +247,8 @@ def prepare_image(data: bytes, content_type: str) -> tuple[bytes, str]:
 
 
 @app.post("/api/translate-image", response_model=ImageTranslateResponse)
-async def translate_image(file: UploadFile = File(...)):
+@limiter.limit(_RATE_IMAGE)
+async def translate_image(request: Request, file: UploadFile = File(...)):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type. Use JPEG, PNG, or WebP.")
 
@@ -431,7 +445,8 @@ class CDLITranslateRequest(BaseModel):
 
 
 @app.post("/api/cdli/translate", response_model=ImageTranslateResponse)
-async def cdli_translate(req: CDLITranslateRequest):
+@limiter.limit(_RATE_CDLI)
+async def cdli_translate(request: Request, req: CDLITranslateRequest):
     p = req.p_number.upper().strip()
     if not p.startswith("P") or not p[1:].isdigit():
         raise HTTPException(status_code=400, detail="Invalid P-number format (e.g. P106294)")
@@ -529,7 +544,8 @@ async def ml_status():
 
 
 @app.post("/api/ml/recognize", response_model=ImageTranslateResponse)
-async def ml_recognize(file: UploadFile = File(...)):
+@limiter.limit(_RATE_IMAGE)
+async def ml_recognize(request: Request, file: UploadFile = File(...)):
     """
     Specialist path: run the trained cuneiform sign classifier on an uploaded
     tablet photo to produce a transliteration, then pass it to Claude for translation.
