@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 
 import torch
-import torchvision
 import torchvision.transforms.functional as TF
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -279,7 +278,7 @@ def main():
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             torch.save(model.state_dict(), ML_DIR / "detector.pt")
-            print(f"           ↑ new best checkpoint saved")
+            print("           ↑ new best checkpoint saved")
 
     print("\nRunning whole-tablet validation evaluation…")
     model.load_state_dict(torch.load(ML_DIR / "detector.pt", map_location="cpu", weights_only=True))
@@ -313,7 +312,7 @@ def main():
         "history": history,
     }
     (ML_DIR / "detector_info.json").write_text(json.dumps(info, indent=2))
-    print(f"\nDetector v2 saved → ml/detector.pt")
+    print("\nDetector v2 saved → ml/detector.pt")
 
 
 if __name__ == "__main__":

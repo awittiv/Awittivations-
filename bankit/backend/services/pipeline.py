@@ -99,15 +99,12 @@ async def run_approval_pipeline(loan_id: str, merchant_id: str) -> None:
         if ai_result.recommendation == "review":
             if corridor_status == "APPROVED" and corridor_risk == "LOW":
                 logger.info("Loan %s upgraded review→approve by corridor", loan_id)
-                final_decision = "approve"
             else:
                 logger.info("Loan %s flagged for human review (AI=review, corridor=%s)", loan_id, corridor_status)
                 return  # stays pending
         else:
             # AI recommended approve
-            if corridor_status == "APPROVED":
-                final_decision = "approve"
-            else:
+            if corridor_status != "APPROVED":
                 logger.info(
                     "Loan %s downgraded approve→review by corridor (risk=%s, provenance=%s)",
                     loan_id, corridor_risk, corridor_provenance,

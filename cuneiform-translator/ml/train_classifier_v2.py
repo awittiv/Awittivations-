@@ -132,7 +132,6 @@ def main():
     print(f"Classes: {n_classes}")
 
     train_tf = get_transforms(train=True)
-    val_tf   = get_transforms(train=False)
 
     # Load GT crops with train transform
     gt_ds = CropDataset(GT_CROPS_DIR, folder_to_idx, train_tf)

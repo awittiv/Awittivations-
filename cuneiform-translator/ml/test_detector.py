@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image
 import torchvision.transforms.functional as TF
 from torchvision.models.detection import (
     fasterrcnn_mobilenet_v3_large_320_fpn,

@@ -20,7 +20,6 @@ import time
 from pathlib import Path
 
 import torch
-import torchvision
 import torchvision.transforms.functional as TF
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
@@ -228,7 +227,7 @@ def main():
             best_loss = epoch_loss
             best_epoch = epoch
             torch.save(model.state_dict(), ML_DIR / "detector.pt")
-            print(f"           ↑ new best checkpoint saved")
+            print("           ↑ new best checkpoint saved")
 
     print("\nRunning validation evaluation…")
     # Reload best checkpoint for eval
@@ -251,8 +250,8 @@ def main():
         "history": history,
     }
     (ML_DIR / "detector_info.json").write_text(json.dumps(info, indent=2))
-    print(f"\nDetector saved → ml/detector.pt")
-    print(f"Info saved     → ml/detector_info.json")
+    print("\nDetector saved → ml/detector.pt")
+    print("Info saved     → ml/detector_info.json")
 
 
 if __name__ == "__main__":

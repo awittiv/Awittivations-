@@ -1,3 +1,4 @@
+# ruff: noqa: E402  — load_dotenv() must run before importing env-reading modules
 import os
 from dotenv import load_dotenv
 load_dotenv()

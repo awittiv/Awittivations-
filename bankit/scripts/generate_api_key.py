@@ -10,7 +10,6 @@ import argparse
 import hashlib
 import os
 import secrets
-import sys
 
 import psycopg2
 from dotenv import load_dotenv

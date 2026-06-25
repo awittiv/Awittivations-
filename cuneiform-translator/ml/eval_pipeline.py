@@ -78,9 +78,6 @@ def main():
     label_map = json.loads((ML_DIR / "label_map.json").read_text())
     tl_to_ci  = label_map["train_label_to_class"]  # train_label str → class idx
 
-    # Build class_idx → train_label reverse map
-    ci_to_tl = {v: k for k, v in tl_to_ci.items()}
-
     total_det_tp = total_det_gt = total_det_pred = 0
     total_clf_top1 = total_clf_top3 = total_clf_total = 0
     per_tablet = []

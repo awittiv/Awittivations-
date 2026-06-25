@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from typing import Literal
 from models.loan import MerchantResponse
 from services import supabase_service
-from services.wallet_service import assign_sovereign_wallet, get_merchant_address
-from services.web3_service import get_passport_token_id, PASSPORT_ADDRESS, _ZERO_ADDRESS
+from services.wallet_service import assign_sovereign_wallet
+from services.web3_service import get_passport_token_id, PASSPORT_ADDRESS
 from auth import get_current_merchant_id
 
 router = APIRouter()
@@ -102,7 +102,7 @@ async def get_wallet(
     # Fetch on-chain BKD balance
     bkd_balance = None
     try:
-        from services.web3_service import get_web3, ROUTER_ABI, PASSPORT_ADDRESS as _PA
+        from services.web3_service import get_web3
         import os
         stablecoin_addr = os.getenv("STABLECOIN_ADDRESS", "")
         if stablecoin_addr and stablecoin_addr != "0x0000000000000000000000000000000000000000":

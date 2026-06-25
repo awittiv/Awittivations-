@@ -159,7 +159,6 @@ def build_dataset(annotations: dict) -> tuple[list, list, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    import torch
     from ultralytics import YOLO
 
     annotations = load_annotations()
@@ -169,7 +168,7 @@ def main():
 
     runs_dir = ML_DIR / "yolo_runs"
     model = YOLO(MODEL)
-    results = model.train(
+    model.train(
         data=str(DATASET_DIR / "data.yaml"),
         epochs=EPOCHS,
         imgsz=IMGSZ,
@@ -229,7 +228,7 @@ def main():
         "epochs": EPOCHS,
     }
     (ML_DIR / "detector_info.json").write_text(json.dumps(info, indent=2))
-    print(f"detector_info.json updated")
+    print("detector_info.json updated")
 
 
 if __name__ == "__main__":

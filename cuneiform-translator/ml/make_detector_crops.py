@@ -55,7 +55,6 @@ def load_annotations() -> dict[str, list[dict]]:
 
 def run_yolo_tiled(model: YOLO, img: Image.Image) -> tuple[list, list]:
     """Tiled YOLO inference; returns (boxes, scores) in scaled image coords."""
-    import numpy as np
     from torchvision.ops import nms
 
     w, h = img.size

@@ -7,7 +7,6 @@ sign frequencies, and co-occurrence patterns.
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 # ------------------------------------------------------------------

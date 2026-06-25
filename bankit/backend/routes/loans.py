@@ -33,7 +33,11 @@ async def get_loan(loan_id: str, merchant_id: str = Depends(get_current_merchant
 
 
 @router.post("/loans/{loan_id}/repay", response_model=LoanResponse)
-async def repay_loan(loan_id: str, merchant_id: str = Depends(get_current_merchant_id)):
+async def repay_loan(
+    loan_id: str,
+    background_tasks: BackgroundTasks,
+    merchant_id: str = Depends(get_current_merchant_id),
+):
     loan = await supabase_service.get_loan_by_id(loan_id)
     if not loan or loan["merchant_id"] != merchant_id:
         raise HTTPException(status_code=404, detail="Loan not found")

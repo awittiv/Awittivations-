@@ -1,3 +1,4 @@
+# ruff: noqa: E402  — load_dotenv() must run before importing env-reading modules
 import os
 import io
 import sys
@@ -344,7 +345,7 @@ def _has_photo(artifact_id: int) -> bool:
 def _clean_artifact(a: dict) -> dict:
     period = a.get("period") or {}
     genres = [g.get("genre", {}).get("genre", "") for g in a.get("genres", []) if g.get("genre")]
-    langs  = [l.get("language", {}).get("language", "") for l in a.get("languages", []) if l.get("language")]
+    langs  = [lang.get("language", {}).get("language", "") for lang in a.get("languages", []) if lang.get("language")]
     colls  = [c.get("collection", {}).get("collection", "") for c in a.get("collections", []) if c.get("collection")]
     art_id = a.get("id", 0)
     p_number = f"P{art_id:06d}"
@@ -356,7 +357,7 @@ def _clean_artifact(a: dict) -> dict:
         "museum_no":   a.get("museum_no", "") or "",
         "period":      period.get("period", "") if period else "",
         "genres":      [g for g in genres if g],
-        "languages":   [l for l in langs if l],
+        "languages":   [lang for lang in langs if lang],
         "collections": [c for c in colls if c],
         "photo_url":   _photo_url(art_id),
         "atf":         atf,

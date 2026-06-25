@@ -113,7 +113,7 @@ async def get_repayment_history(merchant_id: str) -> list[dict]:
     loans = client.table("loans").select("id, amount_inr").eq("merchant_id", merchant_id).execute()
     if not loans.data:
         return []
-    loan_ids = [l["id"] for l in loans.data]
+    loan_ids = [ln["id"] for ln in loans.data]
     txs = (
         client.table("transactions")
         .select("amount, loan_id, created_at")

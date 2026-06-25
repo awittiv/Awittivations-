@@ -125,8 +125,8 @@ async def seed():
         liq_rows = [
             (f"0x{uuid.uuid4().hex}", random.randint(50_000_000, 55_000_000),
              ts(now - timedelta(hours=random.randint(0, 720))),
-             (col := random.choice(col_assets))["symbol"],
-             (dbt := random.choice(dbt_assets))["symbol"],
+             random.choice(col_assets)["symbol"],
+             random.choice(dbt_assets)["symbol"],
              random.choice(WALLETS), random.choice(WALLETS),
              (d := random.uniform(1_000, 80_000)), d * random.uniform(1.04, 1.12))
             for _ in range(40)

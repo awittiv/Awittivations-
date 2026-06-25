@@ -1,5 +1,4 @@
 import hashlib
-import os
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 from services.supabase_service import get_client

@@ -66,10 +66,10 @@ async def _handle_status(merchant: dict, phone: str) -> dict:
 
 async def _handle_repay(merchant: dict, phone: str) -> dict:
     loans = await supabase_service.get_loans_for_merchant(merchant["id"])
-    disbursed = [l for l in loans if l["status"] == "disbursed"]
+    disbursed = [ln for ln in loans if ln["status"] == "disbursed"]
 
     if not disbursed:
-        active = [l for l in loans if l["status"] in ("pending", "approved")]
+        active = [ln for ln in loans if ln["status"] in ("pending", "approved")]
         if active:
             reply = f"Your loan is still being processed (status: {active[0]['status']}). No repayment needed yet."
         else:
@@ -103,14 +103,14 @@ async def _handle_repay(merchant: dict, phone: str) -> dict:
 
 async def _handle_balance(merchant: dict, phone: str) -> dict:
     loans = await supabase_service.get_loans_for_merchant(merchant["id"])
-    disbursed = [l for l in loans if l["status"] == "disbursed"]
+    disbursed = [ln for ln in loans if ln["status"] == "disbursed"]
 
     if not disbursed:
         reply = "You have no outstanding balance. You're all clear! 🎉"
         await send_whatsapp(phone, reply)
         return {"status": "no_balance", "reply": reply}
 
-    total_owed = sum(float(l["amount_inr"]) for l in disbursed)
+    total_owed = sum(float(ln["amount_inr"]) for ln in disbursed)
     reply = (
         f"💰 *Outstanding Balance*\n"
         f"Total owed: ₹{total_owed:,.0f}\n"
@@ -130,7 +130,7 @@ async def _handle_apply(
     # Block if merchant already has an in-flight or active loan
     existing = await supabase_service.get_loans_for_merchant(merchant["id"])
     active_loan = next(
-        (l for l in existing if l["status"] in ("pending", "approved", "disbursed")), None
+        (ln for ln in existing if ln["status"] in ("pending", "approved", "disbursed")), None
     )
     if active_loan:
         if active_loan["status"] == "disbursed":

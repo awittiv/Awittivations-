@@ -7,13 +7,11 @@ Outputs: ml/data/crops/<class_id>/<patch_id>.jpg
 
 import csv
 import ast
-import os
 import time
 import urllib.request
 import urllib.error
 from pathlib import Path
 from PIL import Image, ImageOps
-import io
 
 ANNOTATIONS = [
     "https://raw.githubusercontent.com/CompVis/cuneiform-sign-detection-dataset/master/annotations/bbox_annotations_saa05.csv",
