@@ -27,7 +27,7 @@ async def get_api_key_record(x_api_key: str = Security(_header)) -> dict:
     if not result.data:
         raise HTTPException(status_code=401, detail="Invalid or inactive API key")
 
-    record = result.data
+    record = result.data[0]
     tier = record.get("tier", "starter")
     limit = {"starter": 100, "growth": 1000, "enterprise": 999999}.get(tier, 100)
 
