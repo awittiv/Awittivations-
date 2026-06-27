@@ -47,4 +47,14 @@ contract BankitStablecoin is ERC20, AccessControl, Pausable {
 
     function pause() external onlyRole(COMPLIANCE_ROLE) { _pause(); }
     function unpause() external onlyRole(COMPLIANCE_ROLE) { _unpause(); }
+
+    /// @dev Route ALL balance changes (transfers, mints, burns) through the
+    ///      pause check so an emergency pause is a true freeze, not mint-only.
+    function _update(address from, address to, uint256 value)
+        internal
+        override
+        whenNotPaused
+    {
+        super._update(from, to, value);
+    }
 }
