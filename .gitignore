@@ -44,6 +44,15 @@ venv/
 # Logs
 *.log
 
+# ML model weights (large binaries — not source)
+*.pt
+
+# C/C++ build artifacts (project-dashboard)
+project-dashboard/CMakeCache.txt
+project-dashboard/CMakeFiles/
+project-dashboard/cmake_install.cmake
+project-dashboard/project_data.db
+
 # Misc
 *.swp
 *.save
