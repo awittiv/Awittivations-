@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from backend.auth import require_api_key
 from backend.config import settings
 from backend.services.claude_sql import nl_to_sql, explain_results
 
@@ -27,11 +26,14 @@ async def _execute_sql(sql: str) -> list[dict]:
     return await run_sql(sql)
 
 
-@router.post("/", response_model=QueryResponse, dependencies=[Depends(require_api_key)])
+@router.post("/", response_model=QueryResponse)
 async def natural_language_query(req: QueryRequest):
     """
     Accept a plain-English DeFi question, convert to SQL via Claude,
     execute against local Postgres or Allium, return results + AI summary.
+
+    Public endpoint — no API key required; abuse is bounded by the global
+    per-IP rate limit (see ``Limiter`` in ``backend.main``).
     """
     try:
         sql = await nl_to_sql(req.question)
