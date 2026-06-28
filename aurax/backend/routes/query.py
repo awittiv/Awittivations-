@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from backend.config import settings
+from backend.ratelimit import limiter
 from backend.services.claude_sql import nl_to_sql, explain_results
 
 router = APIRouter(prefix="/query", tags=["NL Query"])
@@ -27,13 +28,15 @@ async def _execute_sql(sql: str) -> list[dict]:
 
 
 @router.post("/", response_model=QueryResponse)
-async def natural_language_query(req: QueryRequest):
+@limiter.limit("10/minute")
+async def natural_language_query(request: Request, req: QueryRequest):
     """
     Accept a plain-English DeFi question, convert to SQL via Claude,
     execute against local Postgres or Allium, return results + AI summary.
 
-    Public endpoint — no API key required; abuse is bounded by the global
-    per-IP rate limit (see ``Limiter`` in ``backend.main``).
+    Public endpoint — no API key required. Because each call makes two
+    Claude requests, it carries a tighter 10/min/IP cap than the global
+    30/min default (see ``backend.ratelimit``).
     """
     try:
         sql = await nl_to_sql(req.question)
