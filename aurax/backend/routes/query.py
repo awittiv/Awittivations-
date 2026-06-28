@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from backend.config import settings
 from backend.ratelimit import limiter
-from backend.services.claude_sql import nl_to_sql, explain_results
+from backend.services.claude_sql import nl_to_sql, repair_sql, explain_results
 
 router = APIRouter(prefix="/query", tags=["NL Query"])
 
@@ -45,9 +45,18 @@ async def natural_language_query(request: Request, req: QueryRequest):
 
     try:
         rows = await _execute_sql(sql)
-    except Exception as e:
-        backend = "local DB" if settings.use_local_db else "Allium"
-        raise HTTPException(status_code=502, detail=f"{backend} query failed: {e}")
+    except Exception as first_error:
+        # The NL->SQL step occasionally emits SQL the DB rejects. Feed the
+        # error back to Claude for one repair attempt before giving up.
+        try:
+            sql = await repair_sql(req.question, sql, str(first_error))
+            rows = await _execute_sql(sql)
+        except Exception as second_error:
+            backend = "local DB" if settings.use_local_db else "Allium"
+            raise HTTPException(
+                status_code=502,
+                detail=f"{backend} query failed after repair attempt: {second_error}",
+            )
 
     summary = await explain_results(req.question, sql, rows[:5])
 
