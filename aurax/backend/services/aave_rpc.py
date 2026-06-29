@@ -64,6 +64,17 @@ _POOL_ABI = [
     },
 ]
 
+# Minimal ERC20 — aToken/debt-token total supplies give real utilization.
+_ERC20_ABI = [
+    {
+        "inputs": [],
+        "name": "totalSupply",
+        "outputs": [{"type": "uint256", "name": ""}],
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
+
 
 def _fetch_rates_sync(chain: str, addresses: list[str] | None = None) -> dict[str, dict]:
     """Fetch live Aave reserve rates keyed by lowercase asset address.
@@ -86,17 +97,38 @@ def _fetch_rates_sync(chain: str, addresses: list[str] | None = None) -> dict[st
             last_error = e
             continue
 
+        def _total_supply(token_addr: str) -> float:
+            erc20 = w3.eth.contract(
+                address=Web3.to_checksum_address(token_addr), abi=_ERC20_ABI
+            )
+            return float(erc20.functions.totalSupply().call())
+
         rates: dict[str, dict] = {}
         for addr in targets:
             try:
                 data = pool.functions.getReserveData(
                     Web3.to_checksum_address(addr)
                 ).call()
-                rates[addr.lower()] = {
+                entry = {
                     "liquidity_rate":       float(data[2]),
                     "variable_borrow_rate": float(data[4]),
                     "stable_borrow_rate":   float(data[5]),
                 }
+                # data[8/9/10] = aToken / stableDebt / variableDebt addresses.
+                # Their total supplies (raw, underlying decimals) give real
+                # utilization = total debt / total supplied.
+                try:
+                    atoken = _total_supply(data[8])
+                    stable_debt = _total_supply(data[9])
+                    variable_debt = _total_supply(data[10])
+                    total_debt = variable_debt + stable_debt
+                    entry["atoken_supply_raw"] = atoken
+                    entry["variable_debt_raw"] = variable_debt
+                    entry["stable_debt_raw"] = stable_debt
+                    entry["utilization_rate"] = round(total_debt / atoken, 4) if atoken > 0 else 0.0
+                except Exception:
+                    pass  # keep rates even if the supply reads fail
+                rates[addr.lower()] = entry
             except Exception:
                 pass  # skip a single unreadable reserve, keep the rest
         if rates:

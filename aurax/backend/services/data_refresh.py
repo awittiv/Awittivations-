@@ -89,13 +89,30 @@ async def refresh_reserves() -> int:
             row["liquidity_rate"]       = rate_src["liquidity_rate"]
             row["variable_borrow_rate"] = rate_src["variable_borrow_rate"]
             row["stable_borrow_rate"]   = rate_src["stable_borrow_rate"]
-            # TVL/utilization/supply only come from DeFiLlama; when it lacks the
-            # reserve, leave None so the upsert COALESCEs to the existing value.
-            row["utilization_rate"]    = llama["utilization_rate"]    if llama else None
-            row["total_atoken_supply"] = llama["total_atoken_supply"] if llama else None
-            row["total_variable_debt"] = llama["total_variable_debt"] if llama else None
-            row["total_stable_debt"]   = llama["total_stable_debt"]   if llama else None
-            row["tvl_usd"]             = llama["tvl_usd"]             if llama else None
+
+            # Utilization + supply/debt: prefer on-chain truth (RPC reads the
+            # aToken/debt-token total supplies — DeFiLlama's pool feed has no
+            # borrow figures, so its utilization was always 0). Fall back to
+            # DeFiLlama, else None so the upsert COALESCEs to the prior value.
+            if rpc and "utilization_rate" in rpc:
+                scale = 10 ** SYMBOL_TO_DECIMALS.get(symbol, 18)
+                row["utilization_rate"]    = rpc["utilization_rate"]
+                row["total_atoken_supply"] = rpc["atoken_supply_raw"] / scale
+                row["total_variable_debt"] = rpc["variable_debt_raw"] / scale
+                row["total_stable_debt"]   = rpc["stable_debt_raw"] / scale
+            elif llama:
+                row["utilization_rate"]    = llama["utilization_rate"]
+                row["total_atoken_supply"] = llama["total_atoken_supply"]
+                row["total_variable_debt"] = llama["total_variable_debt"]
+                row["total_stable_debt"]   = llama["total_stable_debt"]
+            else:
+                row["utilization_rate"]    = None
+                row["total_atoken_supply"] = None
+                row["total_variable_debt"] = None
+                row["total_stable_debt"]   = None
+
+            # TVL needs USD pricing, which only DeFiLlama provides.
+            row["tvl_usd"] = llama["tvl_usd"] if llama else None
             all_rows.append(row)
 
     if not all_rows:
