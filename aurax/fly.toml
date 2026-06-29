@@ -3,6 +3,14 @@ primary_region = "iad"
 
 [build]
 
+[env]
+  # DB lives on the persistent volume so data/history survive deploys.
+  SQLITE_PATH = "/data/aurax.db"
+
+[mounts]
+  source = "aurax_data"
+  destination = "/data"
+
 [http_service]
 auto_start_machines = true
 auto_stop_machines = true

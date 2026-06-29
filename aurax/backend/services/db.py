@@ -1,8 +1,39 @@
+import shutil
+import sqlite3
+from pathlib import Path
+
 import aiosqlite
 from fastapi import HTTPException
 from backend.config import settings
 
 _db: aiosqlite.Connection | None = None
+
+
+def ensure_db_initialized() -> None:
+    """Make sure the DB file and schema exist before first use.
+
+    On a fresh persistent volume the DB path is empty. Prefer copying the
+    image-bundled DB (preserves bootstrap/seed data); otherwise create the
+    schema from scratch. A no-op once the volume already holds the DB, so
+    data accumulated on the volume survives deploys.
+    """
+    target = Path(settings.sqlite_path)
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    bundled = Path(__file__).resolve().parents[2] / "aurax.db"
+    if bundled.exists() and bundled.resolve() != target.resolve():
+        shutil.copy(bundled, target)
+        return
+
+    schema = (Path(__file__).resolve().parents[1] / "db" / "schema.sql").read_text()
+    con = sqlite3.connect(target)
+    try:
+        con.executescript(schema)
+        con.commit()
+    finally:
+        con.close()
 
 
 async def get_db() -> aiosqlite.Connection:

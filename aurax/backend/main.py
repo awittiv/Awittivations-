@@ -33,6 +33,7 @@ async def _hourly_refresh():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    db.ensure_db_initialized()  # seed an empty persistent volume on first boot
     await db.get_db()
     asyncio.create_task(_hourly_refresh())
     yield
