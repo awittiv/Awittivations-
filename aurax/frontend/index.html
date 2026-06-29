@@ -93,11 +93,20 @@
         const chainBadge = p.chain === 'arbitrum'
           ? '<span style="color:#60a5fa;font-size:0.7rem;margin-left:4px">ARB</span>'
           : '<span style="color:#a78bfa;font-size:0.7rem;margin-left:4px">POL</span>';
+        // Zero utilization means nothing is borrowed (e.g. AAVE, where
+        // borrowing is disabled). Show a dash so it doesn't read as a broken
+        // 0.0% — same for the borrow APY of a non-borrowable asset.
+        const util = p.utilization_rate
+          ? `${(p.utilization_rate * 100).toFixed(1)}%`
+          : '<span title="not borrowed" style="color:#6b7280">—</span>';
+        const borrowApy = p.variable_borrow_apy_pct
+          ? `${p.variable_borrow_apy_pct.toFixed(2)}%`
+          : '<span style="color:#6b7280">—</span>';
         return `<tr>
           <td>${p.symbol}${chainBadge}${frozen}</td>
           <td class="${cls}">${apy.toFixed(2)}%</td>
-          <td>${p.variable_borrow_apy_pct.toFixed(2)}%</td>
-          <td>${(p.utilization_rate * 100).toFixed(1)}%</td>
+          <td>${borrowApy}</td>
+          <td>${util}</td>
           <td>$${(p.tvl_usd/1e6).toFixed(1)}M</td>
         </tr>`;
       }).join('');
