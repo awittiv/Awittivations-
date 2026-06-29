@@ -18,8 +18,21 @@ class QueryResponse(BaseModel):
     summary: str
 
 
+def _require_select(sql: str) -> None:
+    """Reject anything that isn't a read. Enforced here at the route so it
+    covers BOTH execution backends — the Allium path has no guard of its own,
+    and this endpoint is public, so Claude-generated SQL must never mutate."""
+    first = sql.strip().split()[0].upper() if sql.strip() else ""
+    if first != "SELECT":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only SELECT queries are allowed, got: {first or '(empty)'}",
+        )
+
+
 async def _execute_sql(sql: str) -> list[dict]:
     """Route SQL to local Postgres or Allium depending on config."""
+    _require_select(sql)
     if settings.use_local_db:
         from backend.services.db import run_sql
         return await run_sql(sql)
