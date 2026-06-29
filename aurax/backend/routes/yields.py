@@ -56,5 +56,10 @@ async def get_risk_adjusted_yields(
     reserves = await _get_reserves(chain)
     return [
         r for r in reserves
-        if r["utilization_rate"] <= max_utilization and not r["is_frozen"]
+        # utilization_rate is NULL for reserves DeFiLlama doesn't enrich; we
+        # can't assert those are under the threshold, so leave them out rather
+        # than crash on a None comparison.
+        if r["utilization_rate"] is not None
+        and r["utilization_rate"] <= max_utilization
+        and not r["is_frozen"]
     ]

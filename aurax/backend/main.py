@@ -1,8 +1,10 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -68,3 +70,12 @@ app.include_router(refresh.router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+_FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    """Serve the static terminal UI (calls /query and /yields on this host)."""
+    return FileResponse(_FRONTEND)
