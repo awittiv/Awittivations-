@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,15 +10,24 @@ from backend.ratelimit import limiter
 from backend.services import db
 from backend.routes import query, yields, refresh
 
+logger = logging.getLogger("aurax.refresh")
+
+# Cap a single refresh so a slow/blocked RPC can't wedge the loop forever
+# (the per-call timeout is 20s and we fan out across two chains + reserves).
+_REFRESH_TIMEOUT = 180
+
 
 async def _hourly_refresh():
-    """Refresh live Aave data from DeFiLlama on startup and every hour."""
+    """Refresh live Aave data on startup and every hour."""
     from backend.services.data_refresh import refresh_reserves
     while True:
         try:
-            await refresh_reserves()
+            n = await asyncio.wait_for(refresh_reserves(), timeout=_REFRESH_TIMEOUT)
+            logger.info("refresh ok: %s reserves updated", n)
+        except asyncio.TimeoutError:
+            logger.warning("refresh timed out after %ss", _REFRESH_TIMEOUT)
         except Exception:
-            pass
+            logger.exception("refresh failed")
         await asyncio.sleep(3600)
 
 

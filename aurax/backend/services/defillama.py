@@ -87,10 +87,12 @@ async def _fetch_prices(symbols: list[str]) -> dict[str, float]:
         )
         resp.raise_for_status()
     data = resp.json()
+    # CoinGecko occasionally returns an id with an empty object (partial
+    # responses / rate-limiting), so guard the inner "usd" access too.
     return {
         sym: data[cg_id]["usd"]
         for sym, cg_id in COINGECKO_IDS.items()
-        if cg_id in data
+        if isinstance(data.get(cg_id), dict) and "usd" in data[cg_id]
     }
 
 
