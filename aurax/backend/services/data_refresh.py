@@ -111,8 +111,15 @@ async def refresh_reserves() -> int:
                 row["total_variable_debt"] = None
                 row["total_stable_debt"]   = None
 
-            # TVL needs USD pricing, which only DeFiLlama provides.
-            row["tvl_usd"] = llama["tvl_usd"] if llama else None
+            # TVL: prefer DeFiLlama's figure; otherwise value the on-chain
+            # supply (aToken total supply x price) so reserves DeFiLlama omits
+            # still report a TVL instead of NULL.
+            if llama:
+                row["tvl_usd"] = llama["tvl_usd"]
+            elif row["total_atoken_supply"] is not None and row["price_usd"]:
+                row["tvl_usd"] = row["total_atoken_supply"] * row["price_usd"]
+            else:
+                row["tvl_usd"] = None
             all_rows.append(row)
 
     if not all_rows:
